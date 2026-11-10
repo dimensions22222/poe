@@ -18,6 +18,7 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The API binds to loopback b
 - Submit a public HTTP(S) URL and choose a limit of 1, 3, or 5 pages.
 - The crawler stays on the submitted hostname, checks `robots.txt`, follows only same-host redirects, and does not execute retrieved JavaScript.
 - Reports include HTML structure, technology signatures, linked resource references, CSS signals, accessibility/SEO checks, heuristic confidence, and previously observed patterns.
+- Confidence values are evidence-based heuristics, not calibrated statistical probabilities.
 - Analyses and pattern counts are persisted in SQLite. Optional report ratings influence the relevance ordering of matching findings on later analyses. This is rule-based retrieval and feedback, not model training.
 - Full source HTML is kept in process memory only until restart and is not written to the database. Reports and summarized analysis data are persistent.
 

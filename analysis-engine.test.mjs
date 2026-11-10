@@ -33,6 +33,10 @@ test("SSRF address screening rejects private, reserved, mapped, and metadata ran
     "168.63.129.16",
     "100.64.0.1",
     "2001:db8::1",
+    "2001:2::1",
+    "2001:20::1",
+    "2001:10::1",
+    "3fff::1",
     "::1",
     "::ffff:127.0.0.1"
   ]) {

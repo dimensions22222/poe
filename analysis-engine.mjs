@@ -65,11 +65,14 @@ export function isPublicAddress(address) {
     return isPublicAddress(`${groups[6] >> 8}.${groups[6] & 255}.${groups[7] >> 8}.${groups[7] & 255}`);
   }
   const globallyRoutable = groups[0] >= 0x2000 && groups[0] <= 0x3fff;
-  const documentation = groups[0] === 0x2001 && groups[1] === 0x0db8;
+  const documentation = (groups[0] === 0x2001 && groups[1] === 0x0db8) ||
+    (groups[0] === 0x3fff && groups[1] < 0x1000);
   const teredo = groups[0] === 0x2001 && groups[1] === 0;
-  const orchid = groups[0] === 0x2001 && (groups[1] & 0xfff0) === 0x0010;
+  const benchmark = groups[0] === 0x2001 && groups[1] === 2 && groups[2] === 0;
+  const orchid = groups[0] === 0x2001 && groups[1] === 0x10 && groups[2] < 0x1000;
+  const orchidV2 = groups[0] === 0x2001 && groups[1] === 0x20 && groups[2] < 0x1000;
   const sixToFour = groups[0] === 0x2002;
-  return globallyRoutable && !documentation && !teredo && !orchid && !sixToFour;
+  return globallyRoutable && !documentation && !teredo && !benchmark && !orchid && !orchidV2 && !sixToFour;
 }
 
 function isBlockedHostname(hostname) {
@@ -250,6 +253,15 @@ export function analyzeDocument(html, pageUrl) {
   const byTag = tag => allNodes.filter(node => isElement(node, tag));
   const attr = (node, name) => getAttribute(node, name);
   const title = normalizedText(byTag("title")[0]) || "Untitled page";
+  let resourceBase = pageUrl;
+  const declaredBase = byTag("base").map(node => attr(node, "href")).find(Boolean);
+  if (declaredBase) {
+    try {
+      resourceBase = new URL(declaredBase, pageUrl).href;
+    } catch {
+      resourceBase = pageUrl;
+    }
+  }
   const headings = allNodes.filter(node => /^h[1-6]$/.test(node.tagName || ""));
   const headingLevels = headings.map(node => Number(node.tagName[1]));
   const links = byTag("a").filter(node => attr(node, "href"));
@@ -311,10 +323,16 @@ export function analyzeDocument(html, pageUrl) {
     ...allNodes.filter(node => node.tagName === "link" && ["icon", "preload", "preconnect", "font"].some(rel => attr(node, "rel").toLowerCase().includes(rel)))
       .map(node => ({ type: attr(node, "as") || attr(node, "rel"), url: attr(node, "href") })),
     ...assets.map(node => ({ type: node.tagName, url: attr(node, "src") })),
+    ...allNodes.filter(node => node.tagName === "video" && attr(node, "poster"))
+      .map(node => ({ type: "poster image", url: attr(node, "poster") })),
+    ...allNodes.filter(node => ["iframe", "embed", "object"].includes(node.tagName) && (attr(node, "src") || attr(node, "data")))
+      .map(node => ({ type: node.tagName, url: attr(node, "src") || attr(node, "data") })),
+    ...[...css.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi)]
+      .map(match => ({ type: "CSS asset", url: match[2].trim() })),
     ...srcsets.map(url => ({ type: "responsive image", url }))
   ].filter(resource => resource.url).map(resource => {
     try {
-      const resolved = new URL(resource.url, pageUrl);
+      const resolved = new URL(resource.url, resourceBase);
       return { ...resource, url: resolved.href, external: resolved.origin !== new URL(pageUrl).origin };
     } catch {
       return { ...resource, external: false };
@@ -396,6 +414,20 @@ export function analyzeDocument(html, pageUrl) {
   }
 
   const patterns = [];
+  const classNames = new Set(allNodes.flatMap(node => attr(node, "class").split(/\s+/).filter(Boolean)));
+  const components = [
+    ["hero", "hero-section"],
+    ["card", "card-component"],
+    ["navbar", "navigation-bar"],
+    ["modal", "modal-dialog"],
+    ["accordion", "accordion"],
+    ["tabs", "tab-navigation"],
+    ["breadcrumb", "breadcrumbs"],
+    ["carousel", "carousel"],
+    ["sidebar", "sidebar-navigation"],
+    ["button", "call-to-action"],
+    ["btn", "call-to-action"]
+  ].filter(([className]) => classNames.has(className)).map(([, pattern]) => pattern);
   if (navigationCount) patterns.push("semantic-navigation");
   if (mainCount) patterns.push("main-content-landmark");
   if (mediaQueries || viewport) patterns.push("responsive-layout");
@@ -404,6 +436,7 @@ export function analyzeDocument(html, pageUrl) {
   if (byTag("form").length) patterns.push("form-interaction");
   if (images.length) patterns.push("image-led-content");
   if (byTag("header").length || byTag("footer").length) patterns.push("semantic-page-shell");
+  patterns.push(...components);
   const confidence = Math.min(0.96, Math.round((0.58 + (headings.length > 0 ? 0.06 : 0) + (technologies.length ? 0.08 : 0) + (styles.length || styleLinks.length ? 0.08 : 0) + (mainCount ? 0.06 : 0) + (navigationCount ? 0.06 : 0)) * 100) / 100);
   const pageHost = new URL(pageUrl).hostname;
   const resolvedResources = resources.map(resource => {
@@ -436,6 +469,8 @@ export function analyzeDocument(html, pageUrl) {
     resources: resolvedResources.slice(0, 100),
     technologies,
     patterns,
+    components,
+    resourceBase,
     palette: colors,
     typography: fontFamilies,
     design: { responsiveMediaQueries: mediaQueries, spacingTokens },
@@ -566,7 +601,7 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
       const href = getAttribute(node, "href");
       if (!href || /^(?:#|mailto:|tel:|javascript:|data:)/i.test(href)) continue;
       try {
-        const linked = new URL(href, finalUrl);
+        const linked = new URL(href, page.resourceBase);
         linked.hash = "";
         linked.username = "";
         linked.password = "";
@@ -605,6 +640,7 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
   ])).values()];
   const technologies = [...new Map(pageResults.flatMap(page => page.technologies).map(item => [item.name, item])).values()];
   const patterns = [...new Set(pageResults.flatMap(page => page.patterns))];
+  const components = [...new Set(pageResults.flatMap(page => page.components))];
   const allResources = [...new Map(pageResults.flatMap(page => page.resources).map(item => [item.url, item])).values()];
   const confidence = Math.round(pageResults.reduce((total, page) => total + page.confidence, 0) / pageResults.length * 100);
 
@@ -625,6 +661,7 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
     headings: primary.headingOutline,
     technologies,
     patterns,
+    components,
     palette: primary.palette,
     typography: primary.typography,
     design: primary.design,
@@ -649,7 +686,7 @@ export function formatAnalysisReport(analysis, knownPatterns = []) {
     : "- No previously stored matching patterns.";
   return `# Website intelligence report
 
-> Deterministic analysis with persistent, retrieval-based memory. This is not a trained machine-learning model and does not execute website scripts.
+> Deterministic analysis with persistent, retrieval-based memory. This is not a trained machine-learning model and does not execute website scripts. Confidence is a heuristic evidence-coverage score, not a calibrated probability.
 
 ## Overview
 
@@ -663,6 +700,7 @@ export function formatAnalysisReport(analysis, knownPatterns = []) {
 
 - Technologies: ${analysis.technologies.map(item => `${item.name} (${Math.round(item.confidence * 100)}% signature confidence)`).join(", ") || "No strong framework signatures found"}
 - Recognized patterns: ${analysis.patterns.join(", ") || "None"}
+- Component signals: ${analysis.components.join(", ") || "No common component class names detected"}
 - Structure counts: ${Object.entries(analysis.counts).map(([key, value]) => `${key} ${value}`).join("; ")}
 - Heading outline: ${analysis.headings.map(item => `${"#".repeat(item.level)} ${item.text}`).join(" | ") || "No headings"}
 

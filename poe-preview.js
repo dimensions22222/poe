@@ -40,6 +40,10 @@
     let previewMode = false;
     let toastTimer;
     let currentAnalysisId = null;
+    let historyCache = [];
+    let commandItems = [];
+    let commandSelection = 0;
+    let commandReturnFocus = null;
     const workflowStages = ["validation", "robots", "retrieval", "mapping", "detection", "comparison", "storing"];
     const workflowLabels = {
       validation: "Validating public URL",
@@ -93,6 +97,15 @@
       const status = document.getElementById("engineStatus");
       status.textContent = message;
       status.dataset.state = state;
+      const online = state !== "error";
+      document.getElementById("sidebarEngineLabel").textContent = state === "error" ? "Unavailable" : state === "active" ? "Analysis active" : "Operational";
+      document.getElementById("sidebarEngineDetail").textContent = state === "error" ? "Check local service" : "Local analysis engine";
+      document.getElementById("overviewEngineStatus").textContent = state === "error" ? "Engine unavailable" : state === "active" ? "Analysis in progress" : "Engine operational";
+      document.querySelectorAll(".sidebar-footer .connection-indicator, .engine-badge .connection-indicator").forEach(indicator => {
+        indicator.classList.toggle("online", online && state !== "active");
+        indicator.classList.toggle("busy", state === "active");
+        indicator.classList.toggle("error", !online);
+      });
     }
 
     function renderWorkflow(stage, progress = 0, failed = false) {
@@ -114,6 +127,13 @@
       document.getElementById("statPatterns").textContent = stats.uniquePatterns;
       document.getElementById("statObservations").textContent = stats.observations;
       document.getElementById("statFeedback").textContent = stats.feedbackCount;
+      document.getElementById("topbarJobStatus").textContent = stats.activeJobs
+        ? `${stats.activeJobs} active ${stats.activeJobs === 1 ? "job" : "jobs"}`
+        : "No active jobs";
+      document.querySelectorAll(".task-indicator .connection-indicator").forEach(indicator => {
+        indicator.classList.toggle("busy", stats.activeJobs > 0);
+        indicator.classList.toggle("online", stats.activeJobs === 0);
+      });
       const patternList = document.getElementById("patternList");
       patternList.replaceChildren();
       if (!data.patterns.length) {
@@ -157,6 +177,7 @@
     }
 
     function renderHistory(history) {
+      historyCache = history;
       const list = document.getElementById("historyList");
       const compareSelect = document.getElementById("compareSelect");
       list.replaceChildren();
@@ -224,6 +245,27 @@
       document.getElementById("reportSummary").textContent =
         `${analysis.title} — ${analysis.counts.headings} headings, ${analysis.counts.links} links, ${analysis.counts.images} images, ${analysis.resources.length} distinct linked resources. Memory contains ${analysis.patterns.length} matched design pattern(s).`;
       document.getElementById("reportText").textContent = report;
+      const metricLabels = {
+        headings: "Headings",
+        links: "Links",
+        images: "Images",
+        formControls: "Form controls",
+        stylesheets: "Stylesheets",
+        externalScripts: "Scripts",
+        externalResources: "External resources"
+      };
+      const metrics = document.getElementById("reportMetrics");
+      metrics.replaceChildren();
+      Object.entries(metricLabels).forEach(([key, label]) => {
+        const metric = document.createElement("span");
+        const value = document.createElement("strong");
+        const name = document.createElement("span");
+        metric.className = "report-metric";
+        value.textContent = analysis.counts[key] ?? 0;
+        name.textContent = label;
+        metric.append(value, name);
+        metrics.appendChild(metric);
+      });
       const technologies = document.getElementById("technologyList");
       technologies.replaceChildren();
       if (!analysis.technologies.length) {
@@ -238,6 +280,64 @@
         chip.textContent = `${technology.name} · ${Math.round(technology.confidence * 100)}%`;
         technologies.appendChild(chip);
       });
+      const structure = document.getElementById("structureList");
+      structure.replaceChildren();
+      if (!analysis.headings?.length) {
+        const empty = document.createElement("li");
+        empty.className = "empty-state";
+        empty.textContent = "No headings were detected.";
+        structure.appendChild(empty);
+      } else {
+        analysis.headings.forEach(heading => {
+          const item = document.createElement("li");
+          item.textContent = `${"#".repeat(heading.level)} ${heading.text}`;
+          structure.appendChild(item);
+        });
+      }
+      const designSummary = document.getElementById("designSummary");
+      designSummary.textContent = [
+        `Palette: ${analysis.palette?.join(", ") || "No inline color tokens observed"}`,
+        `Typography: ${analysis.typography?.join("; ") || "No inline font families observed"}`,
+        `Responsive media queries: ${analysis.design?.responsiveMediaQueries ?? 0}`,
+        `Spacing tokens: ${analysis.design?.spacingTokens?.join(", ") || "No spacing tokens extracted"}`
+      ].join(" · ");
+      document.getElementById("performanceSummary").textContent =
+        `Resource signals: ${analysis.counts.externalResources} external resource(s), ${analysis.counts.externalScripts} script(s), ${analysis.counts.images} image(s). Runtime speed and transferred bytes are not measured.`;
+      const resourceList = document.getElementById("resourceList");
+      resourceList.replaceChildren();
+      const resources = analysis.resources || [];
+      if (!resources.length) {
+        const empty = document.createElement("li");
+        empty.className = "empty-state";
+        empty.textContent = "No external resources were identified.";
+        resourceList.appendChild(empty);
+      } else {
+        resources.slice(0, 12).forEach(resource => {
+          const item = document.createElement("li");
+          item.textContent = `${resource.type}: ${resource.url}${resource.external ? " · external" : ""}`;
+          resourceList.appendChild(item);
+        });
+        if (resources.length > 12) {
+          const more = document.createElement("li");
+          more.textContent = `${resources.length - 12} more resource(s) are available in the full report.`;
+          resourceList.appendChild(more);
+        }
+      }
+      const components = document.getElementById("componentList");
+      components.replaceChildren();
+      if (!analysis.components?.length) {
+        const empty = document.createElement("span");
+        empty.className = "empty-state";
+        empty.textContent = "No common component patterns detected.";
+        components.appendChild(empty);
+      } else {
+        analysis.components.forEach(component => {
+          const chip = document.createElement("span");
+          chip.className = "component-chip";
+          chip.textContent = component;
+          components.appendChild(chip);
+        });
+      }
       const findings = document.getElementById("findingList");
       findings.replaceChildren();
       analysis.findings.forEach(finding => {
@@ -301,6 +401,183 @@
         updateCompareAvailability();
       }
     }
+
+      function openCommandPalette() {
+        const dialog = document.getElementById("commandDialog");
+        if (dialog.open) return;
+        commandReturnFocus = document.activeElement;
+        document.getElementById("commandInput").value = "";
+        renderCommandResults("");
+        dialog.showModal();
+        document.getElementById("commandInput").focus();
+      }
+
+      function renderCommandResults(query) {
+        const results = document.getElementById("commandResults");
+        const normalizedQuery = query.trim().toLowerCase();
+        commandItems = [
+          ...[...document.querySelectorAll("#primaryNav .nav-link")].map(link => ({
+            label: link.textContent.trim(),
+            detail: "Navigate",
+            href: link.getAttribute("href"),
+            icon: link.querySelector(".nav-icon")?.textContent || "›"
+          })),
+          ...historyCache.map(item => ({
+            label: item.title,
+            detail: `Open analysis · ${new Date(item.createdAt).toLocaleDateString()}`,
+            analysisId: item.id,
+            icon: "◷"
+          }))
+        ].filter(item => `${item.label} ${item.detail}`.toLowerCase().includes(normalizedQuery));
+        commandSelection = Math.min(commandSelection, Math.max(0, commandItems.length - 1));
+        results.replaceChildren();
+        if (!commandItems.length) {
+          const empty = document.createElement("div");
+          empty.className = "command-empty";
+          empty.textContent = "No matching pages or analyses.";
+          results.appendChild(empty);
+          return;
+        }
+        commandItems.forEach((item, index) => {
+          const button = document.createElement("button");
+          const icon = document.createElement("span");
+          const label = document.createElement("span");
+          const detail = document.createElement("small");
+          button.type = "button";
+          button.className = "command-item";
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-selected", String(index === commandSelection));
+          icon.textContent = item.icon;
+          label.textContent = item.label;
+          detail.textContent = item.detail;
+          button.append(icon, label, detail);
+          button.addEventListener("mouseenter", () => {
+            commandSelection = index;
+            updateCommandSelection();
+          });
+          button.addEventListener("click", () => executeCommand(item));
+          results.appendChild(button);
+        });
+      }
+
+      function updateCommandSelection() {
+        const buttons = [...document.querySelectorAll("#commandResults .command-item")];
+        buttons.forEach((button, index) => button.setAttribute("aria-selected", String(index === commandSelection)));
+        buttons[commandSelection]?.scrollIntoView({ block: "nearest" });
+      }
+
+      function executeCommand(item) {
+        document.getElementById("commandDialog").close();
+        if (item.analysisId) {
+          loadHistoryReport(item.analysisId);
+          document.getElementById("history").scrollIntoView({ behavior: "smooth" });
+          return;
+        }
+        const target = document.querySelector(item.href);
+        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+        setActiveNavigation(item.href.slice(1));
+      }
+
+      function setActiveNavigation(section) {
+        const link = document.querySelector(`#primaryNav .nav-link[data-section="${section}"]`);
+        if (!link) return;
+        document.querySelectorAll("#primaryNav .nav-link").forEach(item => item.classList.toggle("active", item === link));
+        document.getElementById("currentSectionName").textContent = link.textContent.trim();
+      }
+
+      function setupWorkspaceNavigation() {
+        const sidebar = document.getElementById("appSidebar");
+        const mobileMenuButton = document.getElementById("mobileMenuButton");
+        const collapseButton = document.getElementById("sidebarCollapse");
+        const closeMobileMenu = () => {
+          document.body.classList.remove("nav-open");
+          mobileMenuButton.setAttribute("aria-expanded", "false");
+          mobileMenuButton.setAttribute("aria-label", "Open navigation");
+        };
+        document.querySelectorAll("#primaryNav .nav-link").forEach(link => {
+          link.title = link.textContent.trim();
+          link.addEventListener("click", () => {
+            setActiveNavigation(link.dataset.section);
+            closeMobileMenu();
+          });
+        });
+        mobileMenuButton.addEventListener("click", () => {
+          const open = document.body.classList.toggle("nav-open");
+          mobileMenuButton.setAttribute("aria-expanded", String(open));
+          mobileMenuButton.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+        });
+        document.getElementById("sidebarBackdrop").addEventListener("click", closeMobileMenu);
+        collapseButton.addEventListener("click", () => {
+          const compact = window.matchMedia("(max-width: 1080px)").matches;
+          const collapsed = compact
+            ? !document.body.classList.toggle("sidebar-expanded")
+            : document.body.classList.toggle("sidebar-collapsed");
+          if (compact) document.body.classList.remove("sidebar-collapsed");
+          else document.body.classList.remove("sidebar-expanded");
+          try {
+            localStorage.setItem("ultron-sidebar-collapsed", String(collapsed));
+          } catch {
+            notify("Sidebar preference could not be saved.");
+          }
+          collapseButton.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+          collapseButton.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        });
+        try {
+          if (localStorage.getItem("ultron-sidebar-collapsed") === "true") {
+            document.body.classList.add("sidebar-collapsed");
+            collapseButton.setAttribute("aria-label", "Expand sidebar");
+            collapseButton.title = "Expand sidebar";
+          }
+        } catch {
+          console.info("Sidebar preference storage is unavailable.");
+        }
+        const navSections = [...document.querySelectorAll("#primaryNav .nav-link")];
+        const observer = new IntersectionObserver(entries => {
+          const visible = entries.filter(entry => entry.isIntersecting).sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+          if (visible) setActiveNavigation(visible.target.id);
+        }, { rootMargin: "-18% 0px -68% 0px", threshold: [0, .1, .25, .5] });
+        navSections.forEach(link => {
+          const section = document.querySelector(link.getAttribute("href"));
+          if (section) observer.observe(section);
+        });
+        const dialog = document.getElementById("commandDialog");
+        document.getElementById("commandTrigger").addEventListener("click", openCommandPalette);
+        document.getElementById("closeCommandDialog").addEventListener("click", () => dialog.close());
+        document.getElementById("commandInput").addEventListener("input", event => {
+          commandSelection = 0;
+          renderCommandResults(event.target.value);
+        });
+        document.getElementById("commandInput").addEventListener("keydown", event => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            if (!commandItems.length) return;
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            commandSelection = (commandSelection + direction + commandItems.length) % commandItems.length;
+            updateCommandSelection();
+          } else if (event.key === "Enter" && commandItems[commandSelection]) {
+            event.preventDefault();
+            executeCommand(commandItems[commandSelection]);
+          }
+        });
+        dialog.addEventListener("keydown", event => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            dialog.close();
+          }
+        });
+        dialog.addEventListener("close", () => commandReturnFocus?.focus());
+        document.addEventListener("keydown", event => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+            event.preventDefault();
+            openCommandPalette();
+          } else if (event.key === "Escape") {
+            closeMobileMenu();
+          }
+        });
+        sidebar.addEventListener("keydown", event => {
+          if (event.key === "Escape") closeMobileMenu();
+        });
+      }
 
     function analyzePage(doc, pageUrl) {
       const title = doc.querySelector("title")?.textContent.trim() || "Untitled page";
@@ -750,6 +1027,7 @@ This is a structural extraction, not a full website clone. External dependencies
       notify("Repository JSON exported.");
     });
 
+    setupWorkspaceNavigation();
     sourceInput.value = demoSource;
     buildRepo(demoSource, "");
     loadDashboard();
