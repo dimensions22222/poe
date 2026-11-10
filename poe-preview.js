@@ -39,6 +39,18 @@
     let selectedFile = "index.html";
     let previewMode = false;
     let toastTimer;
+    let currentAnalysisId = null;
+    const workflowStages = ["validation", "robots", "retrieval", "mapping", "detection", "comparison", "storing"];
+    const workflowLabels = {
+      validation: "Validating public URL",
+      robots: "Checking robots.txt",
+      retrieval: "Retrieving permitted pages",
+      mapping: "Mapping DOM and page structure",
+      detection: "Identifying technologies and design patterns",
+      comparison: "Comparing with stored patterns",
+      storing: "Saving report and learning",
+      complete: "Intelligence report generated"
+    };
 
     function notify(message) {
       const toast = document.getElementById("toast");
@@ -52,7 +64,343 @@
       return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "-").slice(0, 100) || "site";
     }
 
-    function buildRepo(rawHtml, pageUrl) {
+    async function apiRequest(path, options = {}, retries = 2) {
+      let lastError;
+      for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+          const response = await fetch(path, {
+            ...options,
+            cache: "no-store",
+            headers: { Accept: "application/json", ...(options.headers || {}) }
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            const error = new Error(payload.error || `The analysis service returned HTTP ${response.status}.`);
+            if (response.status < 500 || response.status === 503) throw Object.assign(error, { retryable: false });
+            throw error;
+          }
+          return payload;
+        } catch (error) {
+          lastError = error;
+          if (error.retryable === false || attempt === retries) break;
+          await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+        }
+      }
+      throw lastError || new Error("The local analysis service could not be reached.");
+    }
+
+    function setEngineStatus(message, state = "") {
+      const status = document.getElementById("engineStatus");
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function renderWorkflow(stage, progress = 0, failed = false) {
+      const activeIndex = workflowStages.indexOf(stage);
+      document.querySelectorAll("#workflow li").forEach((item, index) => {
+        item.classList.toggle("complete", stage === "complete" || (activeIndex >= 0 && index < activeIndex));
+        item.classList.toggle("active", activeIndex === index && !failed);
+        item.classList.toggle("error", activeIndex === index && failed);
+      });
+      document.getElementById("analysisProgress").style.width = `${Math.max(0, Math.min(100, progress))}%`;
+      if (stage === "complete") {
+        document.querySelectorAll("#workflow li").forEach(item => item.classList.add("complete"));
+      }
+    }
+
+    function renderKnowledge(data) {
+      const stats = data.stats;
+      document.getElementById("statAnalyses").textContent = stats.analyses;
+      document.getElementById("statPatterns").textContent = stats.uniquePatterns;
+      document.getElementById("statObservations").textContent = stats.observations;
+      document.getElementById("statFeedback").textContent = stats.feedbackCount;
+      const patternList = document.getElementById("patternList");
+      patternList.replaceChildren();
+      if (!data.patterns.length) {
+        const empty = document.createElement("li");
+        empty.className = "empty-state";
+        empty.textContent = "Patterns are added after a successful URL analysis.";
+        patternList.appendChild(empty);
+      } else {
+        data.patterns.slice(0, 8).forEach(pattern => {
+          const item = document.createElement("li");
+          const label = document.createElement("span");
+          const count = document.createElement("span");
+          label.textContent = pattern.label;
+          count.textContent = `${pattern.occurrences} observations${pattern.feedbackScore == null ? "" : ` · ${pattern.feedbackScore}/5 feedback`}`;
+          item.append(label, count);
+          patternList.appendChild(item);
+        });
+      }
+      const activity = document.getElementById("learningActivity");
+      activity.replaceChildren();
+      const lines = [
+        ...data.patterns.slice(0, 3).map(pattern => ({
+          label: `Recognized ${pattern.category}: ${pattern.label}`,
+          detail: `${pattern.occurrences} stored observation(s)`
+        })),
+        ...(stats.feedbackCount ? [{
+          label: "Feedback incorporated into future relevance ranking",
+          detail: `Average rating ${stats.averageFeedback ?? "not available"}/5`
+        }] : [])
+      ];
+      if (!lines.length) lines.push({ label: "No learned observations yet.", detail: "Run an analysis to create the first record." });
+      lines.forEach(line => {
+        const item = document.createElement("li");
+        const label = document.createElement("span");
+        const detail = document.createElement("span");
+        label.textContent = line.label;
+        detail.textContent = line.detail;
+        item.append(label, detail);
+        activity.appendChild(item);
+      });
+    }
+
+    function renderHistory(history) {
+      const list = document.getElementById("historyList");
+      const compareSelect = document.getElementById("compareSelect");
+      list.replaceChildren();
+      compareSelect.replaceChildren();
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = history.length ? "Select an earlier report" : "No reports to compare";
+      compareSelect.appendChild(placeholder);
+      if (!history.length) {
+        const empty = document.createElement("li");
+        empty.className = "empty-state";
+        empty.textContent = "No stored analyses yet.";
+        list.appendChild(empty);
+      }
+      history.forEach(item => {
+        const row = document.createElement("li");
+        const titleWrap = document.createElement("div");
+        const open = document.createElement("button");
+        const detail = document.createElement("small");
+        const option = document.createElement("option");
+        open.type = "button";
+        open.className = "history-open";
+        open.textContent = item.title;
+        open.addEventListener("click", () => loadHistoryReport(item.id));
+        detail.textContent = `${item.pageCount} page(s) · ${item.confidence}% heuristic confidence · ${new Date(item.createdAt).toLocaleString()}`;
+        titleWrap.className = "history-row-title";
+        titleWrap.append(open, detail);
+        const rating = document.createElement("small");
+        rating.textContent = item.feedback ? `Rated ${item.feedback.usefulness}/5` : "Not rated";
+        row.append(titleWrap, rating);
+        list.appendChild(row);
+        if (item.id !== currentAnalysisId) {
+          const historyOption = document.createElement("option");
+          historyOption.value = item.id;
+          historyOption.textContent = `${item.title} — ${new Date(item.createdAt).toLocaleDateString()}`;
+          compareSelect.appendChild(historyOption);
+        }
+      });
+      compareSelect.disabled = !currentAnalysisId || history.length < 2;
+      document.getElementById("compareButton").disabled = compareSelect.disabled;
+    }
+
+    function updateCompareAvailability() {
+      const select = document.getElementById("compareSelect");
+      document.getElementById("compareButton").disabled = !currentAnalysisId || !select.value;
+    }
+
+    async function loadDashboard() {
+      try {
+        const [health, knowledge, history] = await Promise.all([
+          apiRequest("/api/health"),
+          apiRequest("/api/knowledge"),
+          apiRequest("/api/history?limit=20")
+        ]);
+        renderKnowledge(knowledge);
+        renderHistory(history.history);
+        setEngineStatus(`Local ${health.storage} engine online · rule-based retrieval memory · ${knowledge.stats.activeJobs} active job(s).`);
+      } catch (error) {
+        setEngineStatus(`${error.message} Start the app with npm start, then open http://127.0.0.1:3000.`, "error");
+      }
+    }
+
+    function renderAnalysis(analysis, report) {
+      document.getElementById("reportConfidence").textContent = `${analysis.confidence}% heuristic confidence · ${analysis.pageCount} page(s)`;
+      document.getElementById("reportSummary").textContent =
+        `${analysis.title} — ${analysis.counts.headings} headings, ${analysis.counts.links} links, ${analysis.counts.images} images, ${analysis.resources.length} distinct linked resources. Memory contains ${analysis.patterns.length} matched design pattern(s).`;
+      document.getElementById("reportText").textContent = report;
+      const technologies = document.getElementById("technologyList");
+      technologies.replaceChildren();
+      if (!analysis.technologies.length) {
+        const empty = document.createElement("span");
+        empty.className = "empty-state";
+        empty.textContent = "No strong technology signatures detected.";
+        technologies.appendChild(empty);
+      }
+      analysis.technologies.forEach(technology => {
+        const chip = document.createElement("span");
+        chip.className = "technology-chip";
+        chip.textContent = `${technology.name} · ${Math.round(technology.confidence * 100)}%`;
+        technologies.appendChild(chip);
+      });
+      const findings = document.getElementById("findingList");
+      findings.replaceChildren();
+      analysis.findings.forEach(finding => {
+        const item = document.createElement("li");
+        const heading = document.createElement("strong");
+        const details = document.createElement("p");
+        heading.textContent = `${finding.severity.toUpperCase()} · ${finding.title} · ${finding.relevance ?? Math.round(finding.confidence * 100)}% relevance`;
+        details.textContent = `${finding.detail} ${finding.recommendation}${finding.history ? ` Historical feedback: ${finding.history.feedbackScore}/5 across ${finding.history.ratings} rating(s).` : ""}`;
+        item.append(heading, details);
+        findings.appendChild(item);
+      });
+      document.getElementById("feedbackButton").disabled = !currentAnalysisId;
+      document.getElementById("compareSelect").disabled = !currentAnalysisId;
+      document.getElementById("compareButton").disabled = !currentAnalysisId;
+    }
+
+    async function loadHistoryReport(analysisId) {
+      try {
+        const record = await apiRequest(`/api/analyses/${analysisId}`);
+        currentAnalysisId = record.id;
+        renderAnalysis(record.analysis, record.report);
+        if (record.feedback) {
+          document.getElementById("usefulnessRating").value = record.feedback.usefulness;
+          document.getElementById("accuracyRating").value = record.feedback.accuracy;
+        } else {
+          document.getElementById("usefulnessRating").value = "";
+          document.getElementById("accuracyRating").value = "";
+        }
+        document.getElementById("comparisonResult").textContent = "";
+        setEngineStatus(`Loaded stored analysis for ${record.title}.`);
+        const history = await apiRequest("/api/history?limit=20");
+        renderHistory(history.history);
+      } catch (error) {
+        notify(error.message);
+      }
+    }
+
+    async function compareReports() {
+      const against = document.getElementById("compareSelect").value;
+      if (!currentAnalysisId || !against) return;
+      const button = document.getElementById("compareButton");
+      button.disabled = true;
+      try {
+        const result = await apiRequest(`/api/analyses/${currentAnalysisId}/compare?against=${encodeURIComponent(against)}`);
+        const comparison = result.comparison;
+        const lines = [
+          `${comparison.left.title}  →  ${comparison.right.title}`,
+          "",
+          "Metric changes:"
+        ];
+        comparison.metrics.forEach(metric => lines.push(`- ${metric.name}: ${metric.left} → ${metric.right} (${metric.change >= 0 ? "+" : ""}${metric.change})`));
+        lines.push("", `Added technologies: ${comparison.addedTechnologies.join(", ") || "none"}`);
+        lines.push(`Removed technologies: ${comparison.removedTechnologies.join(", ") || "none"}`);
+        lines.push(`New patterns: ${comparison.addedPatterns.join(", ") || "none"}`);
+        lines.push(`Resolved findings: ${comparison.resolvedFindings.map(item => item.title).join(", ") || "none"}`);
+        lines.push(`New findings: ${comparison.addedFindings.map(item => item.title).join(", ") || "none"}`);
+        document.getElementById("comparisonResult").textContent = lines.join("\n");
+      } catch (error) {
+        notify(error.message);
+      } finally {
+        updateCompareAvailability();
+      }
+    }
+
+    function analyzePage(doc, pageUrl) {
+      const title = doc.querySelector("title")?.textContent.trim() || "Untitled page";
+      const description = doc.querySelector('meta[name="description" i]')?.content.trim();
+      const headings = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+      const images = [...doc.querySelectorAll("img")];
+      const links = [...doc.querySelectorAll("a[href]")];
+      const externalAssets = new Set(
+        [...doc.querySelectorAll("img[src], source[src], video[src], audio[src]")]
+          .map(node => node.getAttribute("src"))
+          .filter(Boolean)
+      );
+      doc.querySelectorAll("[srcset]").forEach(node => {
+        node.getAttribute("srcset").split(",").forEach(item => {
+          const asset = item.trim().split(/\s+/)[0];
+          if (asset) externalAssets.add(asset);
+        });
+      });
+      const controls = [...doc.querySelectorAll('input:not([type="hidden"]), select, textarea')];
+      const headingLevels = headings.map(heading => Number(heading.tagName.slice(1)));
+      const skippedHeadingLevels = headingLevels.some((level, index) =>
+        index === 0 ? level > 1 : level > headingLevels[index - 1] + 1
+      );
+      const missingImageAlt = images.filter(image => !image.hasAttribute("alt")).length;
+      const unnamedLinks = links.filter(link =>
+        !link.textContent.trim() &&
+        !link.getAttribute("aria-label") &&
+        !link.querySelector("img[alt]")
+      ).length;
+      const unlabeledControls = controls.filter(control => {
+        if (control.labels?.length) return false;
+        if (control.getAttribute("aria-label") || control.getAttribute("aria-labelledby")) return false;
+        return !control.closest("label");
+      }).length;
+      const h1Count = doc.querySelectorAll("h1").length;
+      const hasDescription = Boolean(description);
+      const hasLanguage = Boolean(doc.documentElement.getAttribute("lang")?.trim());
+      const hasViewport = Boolean(doc.querySelector('meta[name="viewport"]'));
+      const hasMain = Boolean(doc.querySelector("main, [role='main']"));
+      const hasNavigation = Boolean(doc.querySelector("nav, [role='navigation']"));
+      const checks = [
+        [hasDescription, "Meta description is present.", "Meta description is missing."],
+        [hasLanguage, "Document language is declared.", "Document language is not declared."],
+        [hasViewport, "Responsive viewport is configured.", "Responsive viewport is not configured."],
+        [h1Count === 1, `Page has exactly one top-level heading (found ${h1Count}).`, `Page should have exactly one top-level heading (found ${h1Count}).`],
+        [!skippedHeadingLevels, "Heading levels follow a sequential outline.", "Heading outline skips one or more levels."],
+        [hasMain, "Main content landmark is present.", "Main content landmark is missing."],
+        [hasNavigation, "Navigation landmark is present.", "Navigation landmark is missing."],
+        [missingImageAlt === 0, `Images missing alt attributes: ${missingImageAlt}.`, `Add alt attributes to ${missingImageAlt} image(s).`],
+        [unnamedLinks === 0, `Links without an accessible name: ${unnamedLinks}.`, `Add accessible names to ${unnamedLinks} link(s).`],
+        [unlabeledControls === 0, `Form controls without an accessible label: ${unlabeledControls}.`, `Add accessible labels to ${unlabeledControls} form control(s).`]
+      ];
+      const recommendations = checks
+        .filter(([passed]) => !passed)
+        .map(([, , message]) => message);
+      const clean = value => String(value || "Not provided").replace(/[\r\n]+/g, " ").trim();
+      const outline = headings.length
+        ? headings.map(heading => `- ${"#".repeat(Number(heading.tagName.slice(1)))} ${clean(heading.textContent)}`).join("\n")
+        : "No headings detected.";
+
+      return `# Local page analysis
+
+> Deterministic checks of this single HTML response. This is not a trained AI model, a full browser-rendered audit, or a security scan. No linked pages are crawled.
+
+## Page
+
+- Title: ${clean(title)}
+- URL: ${clean(pageUrl)}
+- Language: ${clean(doc.documentElement.getAttribute("lang"))}
+- Meta description: ${clean(description)}
+
+## Structure
+
+- Headings: ${headings.length}
+- Links: ${links.length}
+- Images: ${images.length}
+- Form controls: ${controls.length}
+- Referenced media assets: ${externalAssets.size}
+- Inline styles: ${doc.querySelectorAll("style").length}
+- Inline scripts: ${doc.querySelectorAll("script:not([src])").length}
+
+### Heading outline
+
+${outline}
+
+## Checks
+
+${checks.map(([passed, passMessage, failMessage]) => `- ${passed ? "PASS" : "REVIEW"} — ${passed ? passMessage : failMessage}`).join("\n")}
+
+## Suggested improvements
+
+${recommendations.length ? recommendations.map(item => `- ${item}`).join("\n") : "No issues were found by these basic checks."}
+
+## Limits
+
+This report only examines the HTML response provided. It does not execute page scripts, inspect rendered layout, fetch external assets, follow links, or infer server-side behavior.
+`;
+    }
+
+    function buildRepo(rawHtml, pageUrl, reportOverride = null) {
       if (!rawHtml.trim()) {
         notify("Paste some HTML or load the demo first.");
         return;
@@ -60,6 +408,7 @@
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(rawHtml, "text/html");
+      const analysis = analyzePage(doc, pageUrl);
       const styles = [];
       const scripts = [];
       const externalAssets = new Set();
@@ -159,6 +508,7 @@ A local, browser-generated breakdown of the supplied webpage.
 - \`styles.css\` — extracted inline styles
 - \`script.js\` — extracted inline scripts
 - \`assets.md\` — detected image and media references
+- \`analysis.md\` — local structural and accessibility checks
 
 ## Source
 
@@ -174,6 +524,7 @@ This is a structural extraction, not a full website clone. External dependencies
         "styles.css": styleText,
         "script.js": scriptText,
         "assets.md": assetText,
+        "analysis.md": reportOverride || analysis,
         "README.md": readme
       };
 
@@ -233,42 +584,123 @@ This is a structural extraction, not a full website clone. External dependencies
       event.preventDefault();
       const input = document.getElementById("urlInput");
       const button = document.getElementById("fetchButton");
-      let url = input.value.trim();
-      if (!url) {
+      const enteredUrl = input.value.trim();
+      if (!enteredUrl) {
         notify("Enter a website URL first.");
         return;
       }
-      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-
-      button.disabled = true;
-      button.textContent = "Fetching…";
-      statusText.textContent = "Fetching page";
+      const url = /^https?:\/\//i.test(enteredUrl) ? enteredUrl : `https://${enteredUrl}`;
       try {
-        const response = await fetch(url, { mode: "cors", redirect: "follow" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const html = await response.text();
-        sourceInput.value = html;
-        buildRepo(html, response.url || url);
+        const parsed = new URL(url);
+        if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Only HTTP and HTTPS website URLs are supported.");
+        if (parsed.username || parsed.password) throw new Error("URLs containing usernames or passwords are not allowed.");
       } catch (error) {
-        statusText.textContent = "Fetch blocked";
-        notify("The site blocked browser access. Paste its HTML source instead.");
+        notify(error.message || "Enter a valid website URL.");
+        return;
+      }
+      currentAnalysisId = null;
+      renderWorkflow("validation", 2);
+      document.getElementById("analysisProgress").style.width = "2%";
+      document.getElementById("feedbackButton").disabled = true;
+      document.getElementById("comparisonResult").textContent = "";
+      setEngineStatus("Submitting URL for public-address and access-policy validation.", "active");
+      button.disabled = true;
+      const originalLabel = button.textContent;
+      button.textContent = "Initializing…";
+      statusText.textContent = "Initializing intelligence core";
+      try {
+        const job = await apiRequest("/api/analyses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, maxPages: Number(document.getElementById("pageLimit").value) })
+        });
+        setEngineStatus("Analysis job accepted; checking robots.txt before retrieval.", "active");
+        await pollAnalysis(job.jobId);
+      } catch (error) {
+        renderWorkflow(error.stage || "validation", error.progress || 0, true);
+        statusText.textContent = "Analysis failed";
+        setEngineStatus(error.message, "error");
+        notify(error.message);
       } finally {
         button.disabled = false;
-        button.textContent = "Analyze URL";
+        button.textContent = originalLabel;
       }
     }
 
+    async function pollAnalysis(jobId) {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 10 * 60 * 1000) {
+        const job = await apiRequest(`/api/jobs/${jobId}`);
+        const label = workflowLabels[job.stage] || "Analyzing website";
+        renderWorkflow(job.stage, job.progress, job.status === "failed");
+        statusText.textContent = label;
+        if (job.status === "complete") {
+          currentAnalysisId = job.analysisId;
+          sourceInput.value = job.sourceHtml || "";
+          document.getElementById("usefulnessRating").value = "";
+          document.getElementById("accuracyRating").value = "";
+          document.getElementById("compareSelect").value = "";
+          buildRepo(job.sourceHtml || "", job.analysis.url, job.report);
+          renderAnalysis(job.analysis, job.report);
+          renderWorkflow("complete", 100);
+          statusText.textContent = "Intelligence report generated";
+          setEngineStatus(`Analysis complete · ${job.analysis.pageCount} permitted page(s) · ${job.analysis.confidence}% heuristic confidence.`, "");
+          await loadDashboard();
+          return;
+        }
+        if (job.status === "failed") {
+          throw Object.assign(new Error(job.error || "Website analysis failed."), {
+            stage: job.stage,
+            progress: job.progress
+          });
+        }
+        setEngineStatus(`${label} · ${job.progress}% complete.`, "active");
+        await new Promise(resolve => setTimeout(resolve, 750));
+      }
+      throw new Error("Analysis is taking longer than expected. Refresh the dashboard to check persisted job status.");
+    }
+
     document.getElementById("demoButton").addEventListener("click", () => {
+      currentAnalysisId = null;
+      document.getElementById("feedbackButton").disabled = true;
       sourceInput.value = demoSource;
       buildRepo(demoSource, "");
+      loadDashboard();
     });
 
     document.getElementById("analyzeButton").addEventListener("click", () => {
+      currentAnalysisId = null;
+      document.getElementById("feedbackButton").disabled = true;
       buildRepo(sourceInput.value, document.getElementById("urlInput").value.trim());
     });
 
     document.getElementById("urlForm").addEventListener("submit", fetchUrl);
     document.getElementById("fileSearch").addEventListener("input", renderFiles);
+    document.getElementById("refreshDashboard").addEventListener("click", loadDashboard);
+    document.getElementById("compareSelect").addEventListener("change", updateCompareAvailability);
+    document.getElementById("compareButton").addEventListener("click", compareReports);
+    document.getElementById("feedbackForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      if (!currentAnalysisId) return;
+      const button = document.getElementById("feedbackButton");
+      button.disabled = true;
+      try {
+        await apiRequest(`/api/analyses/${currentAnalysisId}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            usefulness: Number(document.getElementById("usefulnessRating").value),
+            accuracy: Number(document.getElementById("accuracyRating").value)
+          })
+        });
+        notify("Feedback saved. Similar future findings will use this rating.");
+        await loadDashboard();
+      } catch (error) {
+        notify(error.message);
+      } finally {
+        button.disabled = !currentAnalysisId;
+      }
+    });
 
     document.getElementById("previewTab").addEventListener("click", showPreview);
     document.getElementById("codeTab").addEventListener("click", () => {

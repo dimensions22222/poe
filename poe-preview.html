@@ -16,18 +16,131 @@
       <div>
         <div class="eyebrow">Webpage → repository</div>
         <h1>Deconstruct a website.</h1>
-        <p class="subtitle">Inspect a page’s markup and organize its HTML, styles, scripts, and referenced assets into a clean, repo-style view.</p>
+        <p class="subtitle">Analyze one page’s structure, accessibility signals, and referenced assets with local rules, then organize its source into a clean, repo-style view.</p>
       </div>
-      <div class="hero-badge">✦ &nbsp;Runs in your browser</div>
+      <div class="hero-badge">✦ &nbsp;Local analysis · no model training</div>
     </section>
 
     <form class="ingest" id="urlForm">
       <label class="url-wrap">
         <span class="url-icon">↗</span>
-        <input id="urlInput" type="url" placeholder="https://example.com" aria-label="Website URL">
+        <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
+      </label>
+      <label class="page-limit-wrap">
+        <span>Pages</span>
+        <select id="pageLimit" aria-label="Maximum pages to analyze">
+          <option value="1">1 page</option>
+          <option value="3">Up to 3</option>
+          <option value="5">Up to 5</option>
+        </select>
       </label>
       <button class="button primary" id="fetchButton" type="submit">Analyze URL</button>
     </form>
+
+    <section class="intelligence" aria-labelledby="intelligenceTitle">
+      <div class="intelligence-header">
+        <div>
+          <div class="eyebrow">Local intelligence core</div>
+          <h2 id="intelligenceTitle">Website intelligence</h2>
+          <p id="engineStatus" class="engine-status" role="status">Connecting to the local analysis service…</p>
+        </div>
+        <button class="button subtle" id="refreshDashboard" type="button">Refresh dashboard</button>
+      </div>
+
+      <div class="workflow-panel">
+        <div class="panel-label"><span class="signal-dot"></span> Analysis workflow</div>
+        <ol class="workflow" id="workflow" aria-label="Analysis workflow">
+          <li data-stage="validation"><span>01</span> Validate URL</li>
+          <li data-stage="robots"><span>02</span> Check robots.txt</li>
+          <li data-stage="retrieval"><span>03</span> Retrieve permitted pages</li>
+          <li data-stage="mapping"><span>04</span> Map page structure</li>
+          <li data-stage="detection"><span>05</span> Detect technologies</li>
+          <li data-stage="comparison"><span>06</span> Compare stored patterns</li>
+          <li data-stage="storing"><span>07</span> Save report and learning</li>
+        </ol>
+        <div class="progress-track" aria-hidden="true"><span id="analysisProgress"></span></div>
+      </div>
+
+      <div class="intelligence-stats" aria-label="Persistent knowledge statistics">
+        <article class="intel-stat"><span>Analyses stored</span><strong id="statAnalyses">—</strong></article>
+        <article class="intel-stat"><span>Unique patterns</span><strong id="statPatterns">—</strong></article>
+        <article class="intel-stat"><span>Pattern observations</span><strong id="statObservations">—</strong></article>
+        <article class="intel-stat"><span>User ratings</span><strong id="statFeedback">—</strong></article>
+      </div>
+
+      <div class="intelligence-grid">
+        <section class="intel-panel">
+          <div class="intel-panel-head">
+            <h3>Recognized knowledge</h3>
+            <span id="knowledgeNote">Persistent, retrieval-based memory</span>
+          </div>
+          <ul id="patternList" class="pattern-list"><li class="empty-state">Knowledge loads from stored analyses.</li></ul>
+        </section>
+
+        <section class="intel-panel">
+          <div class="intel-panel-head">
+            <h3>Analysis history</h3>
+            <span>Most recent completed reports</span>
+          </div>
+          <ol id="historyList" class="history-list"><li class="empty-state">No stored analyses yet.</li></ol>
+          <div class="compare-controls">
+            <label for="compareSelect">Compare current report with</label>
+            <select id="compareSelect" disabled><option value="">Analyze a URL first</option></select>
+            <button class="button subtle" id="compareButton" type="button" disabled>Compare reports</button>
+          </div>
+          <pre id="comparisonResult" class="comparison-result" aria-live="polite"></pre>
+        </section>
+      </div>
+
+      <div class="intelligence-grid lower-grid">
+        <section class="intel-panel report-panel">
+          <div class="intel-panel-head">
+            <h3>Selected report</h3>
+            <span id="reportConfidence">Awaiting analysis</span>
+          </div>
+          <div id="reportSummary" class="report-summary">Submit a public URL above to generate a report. Analysis is bounded to the selected number of same-host pages.</div>
+          <div id="technologyList" class="technology-list"></div>
+          <ol id="findingList" class="finding-list"></ol>
+          <details class="report-details">
+            <summary>Full report</summary>
+            <pre id="reportText"></pre>
+          </details>
+          <form id="feedbackForm" class="feedback-form">
+            <h4>Improve future recommendations</h4>
+            <p>Rate this report. Ratings adjust the relevance ranking of similar future findings; they do not train a model.</p>
+            <label>Usefulness
+              <select id="usefulnessRating" required>
+                <option value="">Choose 1–5</option>
+                <option value="1">1 — Not useful</option>
+                <option value="2">2 — Slightly useful</option>
+                <option value="3">3 — Useful</option>
+                <option value="4">4 — Very useful</option>
+                <option value="5">5 — Excellent</option>
+              </select>
+            </label>
+            <label>Accuracy
+              <select id="accuracyRating" required>
+                <option value="">Choose 1–5</option>
+                <option value="1">1 — Inaccurate</option>
+                <option value="2">2 — Needs work</option>
+                <option value="3">3 — Mostly accurate</option>
+                <option value="4">4 — Very accurate</option>
+                <option value="5">5 — Excellent</option>
+              </select>
+            </label>
+            <button class="button primary" id="feedbackButton" type="submit" disabled>Save report rating</button>
+          </form>
+        </section>
+
+        <section class="intel-panel recent-panel">
+          <div class="intel-panel-head">
+            <h3>Learning activity</h3>
+            <span>Persisted observations and feedback</span>
+          </div>
+          <ul id="learningActivity" class="pattern-list"><li class="empty-state">Activity appears after the first saved analysis.</li></ul>
+        </section>
+      </div>
+    </section>
 
     <section class="source-panel">
       <div class="source-head">
@@ -58,7 +171,7 @@
 
       <div class="repo-meta">
         <span class="branch">⑂ &nbsp;main</span>
-        <span id="fileCount">5 files</span>
+        <span id="fileCount">6 files</span>
         <span>Generated locally</span>
         <span class="status-line"><span class="dot"></span><span id="statusText">Ready to analyze</span></span>
       </div>
@@ -84,7 +197,7 @@
       </div>
     </section>
 
-    <p class="footnote">This tool organizes source you provide; it does not bypass logins, paywalls, or browser security rules. Remote sites may block URL analysis with CORS. External assets are listed, not downloaded.</p>
+    <p class="footnote">Analysis is limited to the single page you provide or fetch. It does not crawl links, scan for vulnerabilities, or bypass logins, paywalls, or browser security rules. Remote sites may block URL analysis with CORS. External assets are listed, not downloaded.</p>
   </main>
 
   <div class="toast" id="toast" role="status"></div>
