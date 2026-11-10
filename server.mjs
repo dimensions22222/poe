@@ -384,7 +384,16 @@ async function handleApi(request, response, pathname, searchParams) {
       return;
     }
     const body = await readJson(request);
-    const url = normalizeWebsiteUrl(body.url).href;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      sendError(response, 400, "The request body must be a JSON object.");
+      return;
+    }
+    let url;
+    try {
+      url = normalizeWebsiteUrl(body.url).href;
+    } catch (error) {
+      throw Object.assign(error, { status: 400 });
+    }
     const maxPages = Number(body.maxPages ?? 1);
     if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 5) {
       sendError(response, 400, "Choose between 1 and 5 same-site pages.");
