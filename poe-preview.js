@@ -76,7 +76,7 @@
           const payload = await response.json();
           if (!response.ok) {
             const error = new Error(payload.error || `The analysis service returned HTTP ${response.status}.`);
-            if (response.status < 500 || response.status === 503) throw Object.assign(error, { retryable: false });
+            if (response.status < 500) throw Object.assign(error, { retryable: false });
             throw error;
           }
           return payload;
@@ -599,6 +599,7 @@ This is a structural extraction, not a full website clone. External dependencies
         return;
       }
       currentAnalysisId = null;
+      document.getElementById("retryAnalysis").hidden = true;
       renderWorkflow("validation", 2);
       document.getElementById("analysisProgress").style.width = "2%";
       document.getElementById("feedbackButton").disabled = true;
@@ -620,6 +621,7 @@ This is a structural extraction, not a full website clone. External dependencies
         renderWorkflow(error.stage || "validation", error.progress || 0, true);
         statusText.textContent = "Analysis failed";
         setEngineStatus(error.message, "error");
+        document.getElementById("retryAnalysis").hidden = false;
         notify(error.message);
       } finally {
         button.disabled = false;
@@ -636,6 +638,7 @@ This is a structural extraction, not a full website clone. External dependencies
         statusText.textContent = label;
         if (job.status === "complete") {
           currentAnalysisId = job.analysisId;
+          document.getElementById("retryAnalysis").hidden = true;
           sourceInput.value = job.sourceHtml || "";
           document.getElementById("usefulnessRating").value = "";
           document.getElementById("accuracyRating").value = "";
@@ -677,6 +680,9 @@ This is a structural extraction, not a full website clone. External dependencies
     document.getElementById("urlForm").addEventListener("submit", fetchUrl);
     document.getElementById("fileSearch").addEventListener("input", renderFiles);
     document.getElementById("refreshDashboard").addEventListener("click", loadDashboard);
+    document.getElementById("retryAnalysis").addEventListener("click", () => {
+      document.getElementById("urlForm").requestSubmit();
+    });
     document.getElementById("compareSelect").addEventListener("change", updateCompareAvailability);
     document.getElementById("compareButton").addEventListener("click", compareReports);
     document.getElementById("feedbackForm").addEventListener("submit", async event => {

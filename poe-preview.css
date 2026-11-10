@@ -432,6 +432,7 @@
     }
 
     .intelligence-header { margin-bottom: 16px; }
+    .intelligence-actions { display: flex; gap: 8px; }
     .intelligence .eyebrow { color: #ff7b83; margin-bottom: 6px; }
     .intelligence h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
     .engine-status { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
@@ -509,6 +510,8 @@
 
     .workflow li.complete { color: #d0a6a8; }
     .workflow li.complete span { border-color: var(--red-dim); color: #ff8c92; }
+    .workflow li.error { color: #ff9298; }
+    .workflow li.error span { border-color: #ff4d5e; color: #fff; }
 
     @keyframes scan-pulse {
       50% { box-shadow: 0 0 16px #ff4d5e88; }

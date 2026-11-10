@@ -47,7 +47,8 @@ export function isPublicAddress(address) {
       ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8],
       ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24],
       ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15],
-      ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4]
+      ["198.51.100.0", 24], ["203.0.113.0", 24], ["168.63.129.16", 32],
+      ["224.0.0.0", 4], ["240.0.0.0", 4]
     ];
     return !blocked.some(([subnet, bits]) => {
       const base = ipv4Number(subnet);
@@ -174,6 +175,11 @@ function requestOnce(url, addresses, maxBytes) {
         body: Buffer.concat(chunks).toString("utf8")
       }));
     });
+    const hardTimeout = setTimeout(
+      () => request.destroy(new Error("The website request exceeded the 10-second limit.")),
+      REQUEST_TIMEOUT_MS
+    );
+    request.on("close", () => clearTimeout(hardTimeout));
     request.on("timeout", () => request.destroy(new Error("The website request timed out.")));
     request.on("error", reject);
     request.end();
@@ -441,14 +447,16 @@ export function analyzeDocument(html, pageUrl) {
   };
 }
 
-function parseRobotsRules(text) {
+export function parseRobotsRules(text) {
   const groups = [];
   let agents = [];
   let rules = [];
+  let crawlDelayMs = 0;
   function save() {
-    if (agents.length) groups.push({ agents, rules });
+    if (agents.length) groups.push({ agents, rules, crawlDelayMs });
     agents = [];
     rules = [];
+    crawlDelayMs = 0;
   }
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.split("#", 1)[0].trim();
@@ -461,15 +469,20 @@ function parseRobotsRules(text) {
       agents.push(value.toLowerCase());
     } else if (["allow", "disallow"].includes(key) && agents.length && value) {
       rules.push({ allow: key === "allow", path: value });
+    } else if (key === "crawl-delay" && agents.length) {
+      const delay = Number(value);
+      if (Number.isFinite(delay) && delay >= 0) crawlDelayMs = Math.max(crawlDelayMs, delay * 1000);
     }
   }
   save();
   const exact = groups.filter(group => group.agents.some(agent => agent !== "*" && USER_AGENT.toLowerCase().includes(agent)));
   const selected = exact.length ? exact : groups.filter(group => group.agents.includes("*"));
-  return selected.flatMap(group => group.rules);
+  const selectedRules = selected.flatMap(group => group.rules);
+  selectedRules.crawlDelayMs = Math.max(0, ...selected.map(group => group.crawlDelayMs));
+  return selectedRules;
 }
 
-function robotsAllows(url, rules) {
+export function robotsAllows(url, rules) {
   const path = `${url.pathname}${url.search}`;
   const matches = rules.filter(rule => {
     const anchored = rule.path.endsWith("$");
@@ -519,6 +532,10 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
     visited.add(currentUrl.href);
     const rules = robotsCache.get(rootHost) || [];
     if (!robotsAllows(currentUrl, rules)) continue;
+    if (pageResults.length && rules.crawlDelayMs > 0) {
+      if (rules.crawlDelayMs > 30_000) break;
+      await new Promise(resolveDelay => setTimeout(resolveDelay, rules.crawlDelayMs));
+    }
     onStage({
       key: "retrieval",
       label: `Retrieving page ${pageResults.length + 1}`,

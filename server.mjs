@@ -276,18 +276,17 @@ function serializeAnalysisRow(row) {
 
 async function runAnalysis(jobId, analysisId, url, maxPages) {
   activeJobs.add(jobId);
+  let currentStage = "validation";
+  let currentProgress = 5;
   try {
     const analysis = await analyzeWebsite({
       url,
       maxPages,
-      onStage: stage => statements.updateJob.run(
-        "running",
-        stage.key,
-        stage.progress,
-        null,
-        new Date().toISOString(),
-        jobId
-      )
+      onStage: stage => {
+        currentStage = stage.key;
+        currentProgress = stage.progress;
+        statements.updateJob.run("running", stage.key, stage.progress, null, new Date().toISOString(), jobId);
+      }
     });
     const knownPatterns = knownPatternsFor(analysis);
     const findingScores = historicalFindingScores(analysis.findings.map(item => item.id));
@@ -304,13 +303,15 @@ async function runAnalysis(jobId, analysisId, url, maxPages) {
       return severityDifference || right.relevance - left.relevance;
     });
     const report = formatAnalysisReport(analysis, knownPatterns);
+    currentStage = "storing";
+    currentProgress = 96;
     statements.updateJob.run("running", "storing", 96, null, new Date().toISOString(), jobId);
     storeCompletedAnalysis(analysisId, analysis, report);
     statements.updateJob.run("complete", "complete", 100, null, new Date().toISOString(), jobId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The analysis failed.";
     console.error(`Website analysis ${analysisId} failed: ${message}`);
-    statements.updateJob.run("failed", "failed", 0, message.slice(0, 500), new Date().toISOString(), jobId);
+    statements.updateJob.run("failed", currentStage, currentProgress, message.slice(0, 500), new Date().toISOString(), jobId);
     database.prepare("UPDATE analyses SET status = 'failed', completed_at = ? WHERE id = ?")
       .run(new Date().toISOString(), analysisId);
   } finally {
@@ -355,7 +356,7 @@ async function handleApi(request, response, pathname, searchParams) {
   if (request.method === "GET" && pathname === "/api/knowledge") {
     const totals = database.prepare(`
       SELECT COUNT(*) AS analyses,
-        COALESCE(SUM(patterns.occurrences), 0) AS observations,
+        (SELECT COALESCE(SUM(occurrences), 0) FROM patterns) AS observations,
         (SELECT COUNT(*) FROM patterns) AS uniquePatterns,
         (SELECT COUNT(*) FROM feedback) AS feedbackCount,
         (SELECT ROUND(AVG((usefulness + accuracy) / 2.0), 1) FROM feedback) AS averageFeedback
