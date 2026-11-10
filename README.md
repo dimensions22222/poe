@@ -13,6 +13,15 @@ npm start
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The API binds to loopback by default. Analysis history is stored under `data/intelligence.sqlite`; set `DATA_DIR` or `DATABASE_PATH` to choose another local location. No API keys or external AI services are required.
 
+## Frontend structure
+
+The browser application uses Model–View–Presenter (MVP):
+
+- `js/model.js` owns API requests, URL normalization, local HTML analysis, and reconstruction-file generation.
+- `js/view.js` owns DOM rendering, workspace navigation, and presentation-only interactions.
+- `js/presenter.js` coordinates user actions, analysis jobs, and application state.
+- `poe-preview.js` is the module entry point; `poe-preview.html` and `poe-preview.css` remain the page and styles.
+
 ## Analysis and memory
 
 - Submit a public HTTP(S) URL and choose a limit of 1, 3, or 5 pages.

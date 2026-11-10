@@ -23,7 +23,10 @@ const staticFiles = new Map([
   ["/", ["poe-preview.html", "text/html; charset=utf-8"]],
   ["/poe-preview.html", ["poe-preview.html", "text/html; charset=utf-8"]],
   ["/poe-preview.css", ["poe-preview.css", "text/css; charset=utf-8"]],
-  ["/poe-preview.js", ["poe-preview.js", "text/javascript; charset=utf-8"]]
+  ["/poe-preview.js", ["poe-preview.js", "text/javascript; charset=utf-8"]],
+  ["/js/model.js", ["js/model.js", "text/javascript; charset=utf-8"]],
+  ["/js/view.js", ["js/view.js", "text/javascript; charset=utf-8"]],
+  ["/js/presenter.js", ["js/presenter.js", "text/javascript; charset=utf-8"]]
 ]);
 
 mkdirSync(dataDirectory, { recursive: true });
