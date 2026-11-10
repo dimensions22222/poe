@@ -526,14 +526,22 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
   const queued = new Set([startUrl.href]);
   const visited = new Set();
   const pageResults = [];
+  const crawlNotes = [];
+  let blockedByRobots = 0;
   while (queue.length && pageResults.length < maxPages) {
     const currentUrl = queue.shift();
     if (!currentUrl || visited.has(currentUrl.href)) continue;
     visited.add(currentUrl.href);
     const rules = robotsCache.get(rootHost) || [];
-    if (!robotsAllows(currentUrl, rules)) continue;
+    if (!robotsAllows(currentUrl, rules)) {
+      blockedByRobots += 1;
+      continue;
+    }
     if (pageResults.length && rules.crawlDelayMs > 0) {
-      if (rules.crawlDelayMs > 30_000) break;
+      if (rules.crawlDelayMs > 30_000) {
+        crawlNotes.push("Additional pages were not fetched because the robots.txt crawl-delay exceeds the job wait limit.");
+        break;
+      }
       await new Promise(resolveDelay => setTimeout(resolveDelay, rules.crawlDelayMs));
     }
     onStage({
@@ -577,6 +585,9 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
   if (!pageResults.length) {
     throw new Error("No crawlable pages were found. Check robots.txt or provide a URL that allows analysis.");
   }
+  if (blockedByRobots) {
+    crawlNotes.push(`${blockedByRobots} discovered page(s) were not fetched because robots.txt disallows them.`);
+  }
 
   onStage({ key: "mapping", label: "Mapping DOM and page structure", progress: 70 });
   const primary = pageResults[0];
@@ -606,6 +617,7 @@ export async function analyzeWebsite({ url: inputUrl, maxPages = 1, onStage = ()
       title: pageTitle,
       counts: pageCounts
     })),
+    crawlNotes,
     title: primary.title,
     description: primary.description,
     language: primary.language,
@@ -653,6 +665,12 @@ export function formatAnalysisReport(analysis, knownPatterns = []) {
 - Recognized patterns: ${analysis.patterns.join(", ") || "None"}
 - Structure counts: ${Object.entries(analysis.counts).map(([key, value]) => `${key} ${value}`).join("; ")}
 - Heading outline: ${analysis.headings.map(item => `${"#".repeat(item.level)} ${item.text}`).join(" | ") || "No headings"}
+
+## Pages analyzed
+
+${analysis.pages.map(page => `- ${page.title}: ${page.url}`).join("\n")}
+
+${analysis.crawlNotes.length ? `Crawl notes:\n${analysis.crawlNotes.map(note => `- ${note}`).join("\n")}` : ""}
 
 ## Design language
 

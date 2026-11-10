@@ -668,7 +668,6 @@ This is a structural extraction, not a full website clone. External dependencies
       document.getElementById("feedbackButton").disabled = true;
       sourceInput.value = demoSource;
       buildRepo(demoSource, "");
-      loadDashboard();
     });
 
     document.getElementById("analyzeButton").addEventListener("click", () => {
@@ -753,3 +752,4 @@ This is a structural extraction, not a full website clone. External dependencies
 
     sourceInput.value = demoSource;
     buildRepo(demoSource, "");
+    loadDashboard();
