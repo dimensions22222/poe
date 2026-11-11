@@ -407,11 +407,41 @@ export class UltronView {
       mobileMenuButton.setAttribute("aria-expanded", "false");
       mobileMenuButton.setAttribute("aria-label", "Open navigation");
     };
-    this.document.querySelectorAll("#primaryNav .nav-link").forEach(link => {
+    const pageLinks = [...this.document.querySelectorAll("#primaryNav .nav-link")];
+    const pageNames = new Set(pageLinks.map(link => link.dataset.section));
+    const pageFromHash = () => {
+      const page = window.location.hash.slice(1);
+      return pageNames.has(page) ? page : "overview";
+    };
+    const showPage = (page, { scroll = false } = {}) => {
+      const selectedPage = pageNames.has(page) ? page : "overview";
+      this.document.querySelectorAll(".page-view").forEach(view => {
+        view.hidden = view.dataset.page !== selectedPage;
+      });
+      this.setActiveNavigation(selectedPage);
+      if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    this.navigateToPage = page => {
+      const selectedPage = pageNames.has(page) ? page : "overview";
+      if (window.location.hash.slice(1) !== selectedPage) {
+        window.location.hash = selectedPage;
+      } else {
+        showPage(selectedPage, { scroll: true });
+      }
+    };
+
+    pageLinks.forEach(link => {
       link.title = link.textContent.trim();
-      link.addEventListener("click", () => {
-        this.setActiveNavigation(link.dataset.section);
+      link.addEventListener("click", event => {
+        event.preventDefault();
+        this.navigateToPage(link.dataset.section);
         closeMobileMenu();
+      });
+    });
+    this.document.querySelectorAll("[data-navigate]").forEach(link => {
+      link.addEventListener("click", event => {
+        event.preventDefault();
+        this.navigateToPage(link.dataset.navigate);
       });
     });
     mobileMenuButton.addEventListener("click", () => {
@@ -445,15 +475,11 @@ export class UltronView {
       console.info("Sidebar preference storage is unavailable.");
     }
 
-    const observer = new IntersectionObserver(entries => {
-      const visible = entries.filter(entry => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-      if (visible) this.setActiveNavigation(visible.target.id);
-    }, { rootMargin: "-18% 0px -68% 0px", threshold: [0, .1, .25, .5] });
-    this.document.querySelectorAll("#primaryNav .nav-link").forEach(link => {
-      const section = this.document.querySelector(link.getAttribute("href"));
-      if (section) observer.observe(section);
-    });
+    window.addEventListener("hashchange", () => showPage(pageFromHash(), { scroll: true }));
+    if (!window.location.hash || !pageNames.has(window.location.hash.slice(1))) {
+      history.replaceState(null, "", "#overview");
+    }
+    showPage(pageFromHash());
 
     const dialog = this.element("commandDialog");
     this.element("commandTrigger").addEventListener("click", () => this.openCommandPalette());
@@ -562,11 +588,10 @@ export class UltronView {
     this.element("commandDialog").close();
     if (item.analysisId) {
       this.onOpenAnalysis?.(item.analysisId);
-      this.element("history").scrollIntoView({ behavior: "smooth" });
+      this.navigateToPage?.("analysis");
       return;
     }
-    this.document.querySelector(item.href)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    this.setActiveNavigation(item.href.slice(1));
+    this.navigateToPage?.(item.href.slice(1));
   }
 
   setActiveNavigation(section) {

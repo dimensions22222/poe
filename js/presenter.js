@@ -41,6 +41,7 @@ export class UltronPresenter {
         this.view.element("urlInput").value.trim()
       );
     });
+    this.view.element("copyWebsiteButton").addEventListener("click", () => this.prepareWebsiteCopy());
     this.view.element("urlForm").addEventListener("submit", event => this.fetchUrl(event));
     this.view.element("urlInput").addEventListener("input", () => this.scheduleAutomaticAnalysis());
     this.view.element("monitorForm").addEventListener("submit", event => this.addMonitor(event));
@@ -73,7 +74,7 @@ export class UltronPresenter {
       );
     } catch (error) {
       this.view.setEngineStatus(
-        `${error.message} Start the app with npm start, then open http://127.0.0.1:3000.`,
+        `The local engine could not be reached. Run npm.cmd start in this project, then open http://127.0.0.1:3000. Opening poe-preview.html directly or through another dev server cannot reach this engine.`,
         "error"
       );
     }
@@ -174,6 +175,27 @@ export class UltronPresenter {
     }
   }
 
+  prepareWebsiteCopy() {
+    if (!this.view.element("copyAuthorization").checked) {
+      this.view.notify("Confirm that you own the website or have permission before preparing a copy.");
+      return;
+    }
+    const source = this.view.element("sourceInput").value;
+    const pageUrl = this.view.element("urlInput").value.trim();
+    try {
+      const repository = this.model.createWebsiteCopy(source, pageUrl);
+      this.state.files = repository.files;
+      this.state.selectedFile = "index.html";
+      this.state.previewMode = false;
+      this.view.renderRepository(repository, this.state.selectedFile, name => this.selectFile(name));
+      this.view.showCode(this.state.selectedFile, this.state.files);
+      this.view.setRepositoryStatus("Website copy prepared");
+      this.view.notify("Static website copy prepared. Download the files or export the project JSON.");
+    } catch (error) {
+      this.view.notify(error.message);
+    }
+  }
+
   selectFile(name) {
     this.state.selectedFile = name;
     this.state.previewMode = false;
@@ -262,6 +284,7 @@ export class UltronPresenter {
         this.state.currentAnalysisId = job.analysisId;
         this.view.element("retryAnalysis").hidden = true;
         this.view.element("sourceInput").value = job.sourceHtml || "";
+        this.view.element("urlInput").value = job.analysis.url;
         this.view.element("usefulnessRating").value = "";
         this.view.element("accuracyRating").value = "";
         this.view.element("compareSelect").value = "";
@@ -291,6 +314,7 @@ export class UltronPresenter {
     try {
       const record = await this.model.loadHistoryReport(analysisId);
       this.state.currentAnalysisId = record.id;
+      this.view.element("urlInput").value = record.url;
       if (record.sourceHtml) {
         this.view.element("sourceInput").value = record.sourceHtml;
         this.buildRepository(record.sourceHtml, record.url, record.report);

@@ -296,6 +296,48 @@ This is a structural extraction, not a full website clone. External dependencies
     };
   }
 
+  function createWebsiteCopy(rawHtml, pageUrl = "") {
+    if (!rawHtml.trim()) {
+      throw new Error("Analyze a website first, or paste the page HTML to prepare a copy.");
+    }
+    if (!pageUrl) {
+      throw new Error("Enter the source website URL before preparing a copy so resource links can be preserved.");
+    }
+    const sourceUrl = normalizeUrl(pageUrl);
+    const doc = new DOMParser().parseFromString(rawHtml, "text/html");
+    const resolveUrl = value => {
+      if (!value || value.startsWith("#") || value.startsWith("data:")) return value;
+      try { return new URL(value, sourceUrl).href; } catch { return value; }
+    };
+    doc.querySelectorAll("[src], link[href], a[href], form[action], video[poster], object[data]").forEach(node => {
+      const attribute = node.hasAttribute("src") ? "src"
+        : node.hasAttribute("href") ? "href"
+          : node.hasAttribute("action") ? "action"
+            : node.hasAttribute("poster") ? "poster" : "data";
+      node.setAttribute(attribute, resolveUrl(node.getAttribute(attribute)));
+    });
+    doc.querySelectorAll("[srcset]").forEach(node => {
+      const srcset = node.getAttribute("srcset").split(",").map(item => {
+        const parts = item.trim().split(/\s+/);
+        parts[0] = resolveUrl(parts[0]);
+        return parts.join(" ");
+      }).join(", ");
+      node.setAttribute("srcset", srcset);
+    });
+    const title = doc.querySelector("title")?.textContent.trim() || "website-copy";
+    const name = safeFileName(`${title.toLowerCase().replace(/\s+/g, "-")}-copy`);
+    const portableMarkup = "<!doctype html>\n" + doc.documentElement.outerHTML;
+    const notes = `# Static website copy\n\nSource: ${sourceUrl}\n\n## Included\n\n- \`index.html\` — fetched page HTML with relative links resolved to the original website\n- \`original-source.html\` — unmodified fetched HTML response\n\n## Important limits\n\nThis is a static source snapshot. It does not include server-side application code, databases, authenticated content, payments, private APIs, API keys, or browser/runtime-only states. External styles, media, and scripts remain hosted by their original providers and may stop working if those resources change or block access.\n\nUse this copy only for a website you own or are authorized to reproduce.\n`;
+    return {
+      name,
+      files: {
+        "index.html": portableMarkup,
+        "original-source.html": rawHtml,
+        "COPYING-NOTES.md": notes
+      }
+    };
+  }
+
   return {
     request,
     normalizeUrl,
@@ -328,6 +370,7 @@ This is a structural extraction, not a full website clone. External dependencies
       body: JSON.stringify({ usefulness, accuracy })
     }),
     analyzeSource: (rawHtml, pageUrl = "") => buildRepository(rawHtml, pageUrl),
-    buildRepository
+    buildRepository,
+    createWebsiteCopy
   };
 }

@@ -11,6 +11,8 @@ npm install
 npm start
 ```
 
+On Windows PowerShell, use `npm.cmd start` if PowerShell blocks `npm.ps1` because of its execution-policy setting.
+
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The local service binds to loopback by default. Analysis history is stored under `data/intelligence.sqlite`; set `DATA_DIR` or `DATABASE_PATH` to choose another local location.
 
 To enable optional AI-enhanced insights, set `OPENAI_API_KEY` in the server process environment. The key stays server-side and is never stored in the database or sent to the browser. `OPENAI_MODEL` optionally selects a model; the default is `gpt-4.1-mini`.
@@ -18,7 +20,8 @@ To enable optional AI-enhanced insights, set `OPENAI_API_KEY` in the server proc
 PowerShell:
 
 ```powershell
-$env:OPENAI_API_KEY = "your-new-key"
+$secret = Read-Host "OpenAI API key" -AsSecureString
+$env:OPENAI_API_KEY = (New-Object System.Net.NetworkCredential("", $secret)).Password
 $env:OPENAI_MODEL = "gpt-4.1-mini"
 npm start
 ```
@@ -33,6 +36,17 @@ The browser application uses Model–View–Presenter (MVP):
 - `js/view.js` owns DOM rendering, workspace navigation, and presentation-only interactions.
 - `js/presenter.js` coordinates user actions, analysis jobs, and application state.
 - `poe-preview.js` is the module entry point; `poe-preview.html` and `poe-preview.css` remain the page and styles.
+- The sidebar switches between complete workspace pages (Overview, Website analysis, Reconstruction studio, and Settings) rather than scrolling through every workspace area in one view.
+
+## If the engine says offline
+
+The browser interface calls the local API at the same origin. Start the service from this project and open the URL it prints:
+
+```powershell
+npm.cmd start
+```
+
+Then visit [http://127.0.0.1:3000](http://127.0.0.1:3000). Do not open `poe-preview.html` directly from the file system or serve it from a different development server; either case makes its `/api/*` requests miss the local analysis engine and it will show as unavailable.
 
 ## Analysis and memory
 
@@ -46,6 +60,7 @@ The browser application uses Model–View–Presenter (MVP):
 - Analyses and pattern counts are persisted in SQLite. Optional report ratings influence the relevance ordering of matching findings on later analyses. This is rule-based retrieval and feedback, not model training.
 - Full source HTML is kept in process memory only until restart and is not written to the database. Reports and summarized analysis data are persistent.
 - Completed interactive and scheduled analyses automatically generate reconstruction files in the browser. The newest scheduled result is opened and rebuilt when the page detects it; historical reports can also rebuild while their source remains in memory.
+- The Reconstruction Studio can prepare a static website copy for sites you own or are authorized to reproduce. It includes the fetched HTML response and a portable version with resource links resolved to the original website; it does not copy backend systems, authenticated content, private APIs, databases, payment flows, or runtime-only states.
 
 ## API
 

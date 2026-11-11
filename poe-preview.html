@@ -16,9 +16,6 @@
         <a class="nav-link" href="#overview" data-section="overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">Overview</span></a>
         <a class="nav-link" href="#analysis" data-section="analysis"><span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-label">Website analysis</span></a>
         <a class="nav-link" href="#studio" data-section="studio"><span class="nav-icon" aria-hidden="true">⌘</span><span class="nav-label">Reconstruction studio</span></a>
-        <a class="nav-link" href="#components" data-section="components"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Component library</span></a>
-        <a class="nav-link" href="#knowledge" data-section="knowledge"><span class="nav-icon" aria-hidden="true">◈</span><span class="nav-label">Knowledge base</span></a>
-        <a class="nav-link" href="#history" data-section="history"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-label">Analysis history</span></a>
       </nav>
       <div class="sidebar-spacer"></div>
       <a class="nav-link settings-link" href="#settings" data-section="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings &amp; limits</span></a>
@@ -47,7 +44,7 @@
       </header>
 
       <main class="page-content">
-    <section class="page-heading" id="overview">
+    <section class="page-heading page-view" id="overview" data-page="overview">
       <div>
         <div class="eyebrow">Workspace overview</div>
         <h1>Website analysis</h1>
@@ -55,10 +52,11 @@
       </div>
       <div class="page-heading-actions">
         <span class="engine-badge"><span class="connection-indicator"></span><span id="overviewEngineStatus">Checking engine</span></span>
+        <a class="button primary" href="#analysis" data-navigate="analysis">Start an analysis</a>
       </div>
     </section>
 
-    <section class="analysis-section" id="analysis" aria-labelledby="analysisTitle">
+    <section class="analysis-section page-view" id="analysis" data-page="analysis" aria-labelledby="analysisTitle">
       <div class="section-heading">
         <div><h2 id="analysisTitle">Analyze a website</h2><p>Enter a public URL. ULTRON respects robots.txt and stays on the same host.</p></div>
       </div>
@@ -80,7 +78,7 @@
       <p class="field-help" id="urlHelp">Paste or enter a URL to start automatically. Analyze 1, 3, or 5 pages. Only public HTTP(S) hosts and standard ports are allowed.</p>
     </section>
 
-    <section class="intelligence" aria-labelledby="intelligenceTitle" id="dashboard">
+    <section class="intelligence page-view" aria-labelledby="intelligenceTitle" id="dashboard" data-page="analysis">
       <div class="intelligence-header">
         <div>
           <div class="eyebrow">Local intelligence core</div>
@@ -237,7 +235,7 @@
       </div>
     </section>
 
-    <section class="reconstruction-section" id="studio" aria-labelledby="studioTitle">
+    <section class="reconstruction-section page-view" id="studio" data-page="studio" aria-labelledby="studioTitle">
     <div class="section-heading">
       <div><div class="eyebrow">Reconstruction studio</div><h2 id="studioTitle">Explore page source</h2><p>Inspect generated files and preview the supplied markup. Remote scripts stay disabled in the preview.</p></div>
       <div class="studio-status"><span class="connection-indicator"></span>Local preview sandbox</div>
@@ -251,6 +249,19 @@
         </div>
       </div>
       <textarea id="sourceInput" spellcheck="false" aria-label="Paste webpage HTML"></textarea>
+    </section>
+
+    <section class="copy-panel" aria-labelledby="copyWebsiteTitle">
+      <div>
+        <div class="eyebrow">Website copier</div>
+        <h3 id="copyWebsiteTitle">Create a static website copy</h3>
+        <p>After analyzing a URL, create a project with the original fetched HTML and a portable copy whose resource links point to the source website.</p>
+      </div>
+      <div class="copy-panel-actions">
+        <label class="copy-consent"><input id="copyAuthorization" type="checkbox"> <span>I own this website or have permission to reproduce it.</span></label>
+        <button class="button primary" id="copyWebsiteButton" type="button">Prepare website copy</button>
+      </div>
+      <p class="field-help">This copies the retrieved static page source only. It cannot copy servers, accounts, databases, private content, payments, API keys, or JavaScript-rendered states. Downloaded copies should be used only where you have authorization.</p>
     </section>
 
     <section class="workspace" aria-label="Generated repository">
@@ -299,7 +310,7 @@
 
     </section>
 
-    <section class="settings-section" id="settings" aria-labelledby="settingsHeading">
+    <section class="settings-section page-view" id="settings" data-page="settings" aria-labelledby="settingsHeading">
       <div class="section-heading">
         <div><div class="eyebrow">Service details</div><h2 id="settingsHeading">Settings &amp; analysis limits</h2><p>Configuration and privacy details for the local analysis engine.</p></div>
       </div>

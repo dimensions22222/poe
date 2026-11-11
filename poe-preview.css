@@ -277,7 +277,7 @@ h4 { font-size: 12px; font-weight: 600; }
 .engine-status[data-state="error"] { color: #f08087; }
 .engine-status[data-state="active"] { color: #dca3a6; }
 
-.workflow-panel, .intel-panel, .source-panel, .workspace {
+.workflow-panel, .intel-panel, .source-panel, .copy-panel, .workspace {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -373,6 +373,13 @@ h4 { font-size: 12px; font-weight: 600; }
 .source-actions .button { min-height: 28px; padding: 0 8px; font-size: 9px; }
 #sourceInput { display: block; width: 100%; height: 124px; resize: vertical; padding: 11px 13px; border: 0; outline: 0; background: #0e1115; color: #bfc6d0; font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; }
 #sourceInput:focus-visible { box-shadow: inset 0 0 0 1px #8f4a52; }
+.copy-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 18px; margin-bottom: 9px; padding: 12px 13px; }
+.copy-panel h3 { margin: 3px 0 0; font-size: 12px; }
+.copy-panel p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+.copy-panel > .field-help { grid-column: 1 / -1; margin: 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.copy-panel-actions { display: grid; align-content: center; justify-items: end; gap: 8px; }
+.copy-consent { display: flex; max-width: 260px; align-items: flex-start; gap: 6px; color: var(--text-soft); font-size: 9px; line-height: 1.35; }
+.copy-consent input { margin: 1px 0 0; accent-color: var(--red); }
 .workspace { overflow: hidden; }
 .repo-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--border); }
 .repo-title { display: flex; min-width: 0; align-items: center; gap: 8px; }
@@ -541,6 +548,8 @@ kbd { padding: 2px 5px; border: 1px solid var(--border-strong); border-radius: 4
   .source-head { align-items: flex-start; flex-direction: column; }
   .source-actions { width: 100%; }
   .source-actions .button { flex: 1; }
+  .copy-panel { grid-template-columns: 1fr; }
+  .copy-panel-actions { justify-items: start; }
   .editor-head { padding: 0 8px; }
   .editor-actions .hide-small { display: none; }
   #codeView { min-height: 300px; padding: 11px; font-size: 9px; }
@@ -549,4 +558,8 @@ kbd { padding: 2px 5px; border: 1px solid var(--border-strong); border-radius: 4
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+/* Primary navigation switches complete workspace pages instead of scrolling one long dashboard. */
+.page-view[hidden] {
+  display: none !important;
 }
