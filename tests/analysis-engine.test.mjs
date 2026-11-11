@@ -6,7 +6,7 @@ import {
   normalizeWebsiteUrl,
   parseRobotsRules,
   robotsAllows
-} from "./analysis-engine.mjs";
+} from "../src/engine/analysis-engine.mjs";
 
 test("URL validation accepts public HTTP(S) pages and rejects non-web protocols", () => {
   assert.equal(normalizeWebsiteUrl("https://example.com/a#section").href, "https://example.com/a");

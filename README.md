@@ -28,15 +28,28 @@ npm start
 
 The AI request contains a compact summary of extracted page data (such as headings, technology signals, design tokens, and findings); it does not include full source HTML or linked resource URLs. This sends website-derived summary data to OpenAI. If AI enhancement is not configured or a request fails, deterministic analysis remains available and the UI reports the enhancement status. Revoke any key accidentally pasted into chat or committed to source control.
 
-## Frontend structure
+## Project structure
 
 The browser application uses Model–View–Presenter (MVP):
 
-- `js/model.js` owns API requests, URL normalization, local HTML analysis, and reconstruction-file generation.
-- `js/view.js` owns DOM rendering, workspace navigation, and presentation-only interactions.
-- `js/presenter.js` coordinates user actions, analysis jobs, and application state.
-- `poe-preview.js` is the module entry point; `poe-preview.html` and `poe-preview.css` remain the page and styles.
+- `src/web/model.js` owns API requests, URL normalization, local HTML analysis, and reconstruction-file generation.
+- `src/web/view.js` owns DOM rendering, workspace navigation, and presentation-only interactions.
+- `src/web/presenter.js` coordinates user actions, analysis jobs, and application state.
+- `public/app.js` is the browser entry point; `public/index.html` and `public/styles.css` are the static interface files.
 - The sidebar switches between complete workspace pages (Overview, Website analysis, Reconstruction studio, and Settings) rather than scrolling through every workspace area in one view.
+
+```
+src/
+  server.mjs             # HTTP API, persistence, scheduling, and static-file routing
+  engine/                # Website analysis and optional AI enhancement
+  web/                   # Browser Model-View-Presenter modules
+public/                  # Browser entry point, HTML, and styles
+tests/                   # Node test suite
+docs/                    # Architecture and developer documentation
+data/                    # Local SQLite runtime data (ignored by Git)
+```
+
+See [the architecture guide](docs/ARCHITECTURE.md) for ownership boundaries and common development tasks.
 
 ## If the engine says offline
 
@@ -46,7 +59,7 @@ The browser interface calls the local API at the same origin. Start the service 
 npm.cmd start
 ```
 
-Then visit [http://127.0.0.1:3000](http://127.0.0.1:3000). Do not open `poe-preview.html` directly from the file system or serve it from a different development server; either case makes its `/api/*` requests miss the local analysis engine and it will show as unavailable.
+Then visit [http://127.0.0.1:3000](http://127.0.0.1:3000). Do not open `public/index.html` directly from the file system or serve it from a different development server; either case makes its `/api/*` requests miss the local analysis engine and it will show as unavailable.
 
 ## Analysis and memory
 

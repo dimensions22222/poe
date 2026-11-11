@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -8,11 +8,13 @@ import {
   analyzeWebsite,
   formatAnalysisReport,
   normalizeWebsiteUrl
-} from "./analysis-engine.mjs";
-import { enhanceAnalysis, isAiEnhancementEnabled } from "./openai-enhancer.mjs";
+} from "./engine/analysis-engine.js";
+import { enhanceAnalysis, isAiEnhancementEnabled } from "./engine/openai-enhancer.js";
 
-const root = dirname(fileURLToPath(import.meta.url));
-const dataDirectory = resolve(process.env.DATA_DIR || join(root, "data"));
+const sourceDirectory = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(sourceDirectory, "..");
+const publicDirectory = join(projectRoot, "public");
+const dataDirectory = resolve(process.env.DATA_DIR || join(projectRoot, "data"));
 const databasePath = resolve(process.env.DATABASE_PATH || join(dataDirectory, "intelligence.sqlite"));
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "127.0.0.1";
@@ -23,83 +25,44 @@ const activeJobs = new Set();
 const transientSources = new Map();
 let schedulingMonitors = false;
 const staticFiles = new Map([
-  ["/", ["poe-preview.html", "text/html; charset=utf-8"]],
-  ["/poe-preview.html", ["poe-preview.html", "text/html; charset=utf-8"]],
-  ["/poe-preview.css", ["poe-preview.css", "text/css; charset=utf-8"]],
-  ["/poe-preview.js", ["poe-preview.js", "text/javascript; charset=utf-8"]],
-  ["/js/model.js", ["js/model.js", "text/javascript; charset=utf-8"]],
-  ["/js/view.js", ["js/view.js", "text/javascript; charset=utf-8"]],
-  ["/js/presenter.js", ["js/presenter.js", "text/javascript; charset=utf-8"]]
+  ["/", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
+  ["/index.html", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
+  ["/styles.css", [join(publicDirectory, "styles.css"), "text/css; charset=utf-8"]],
+  ["/app.js", [join(publicDirectory, "app.js"), "text/javascript; charset=utf-8"]],
+  ["/js/model.js", [join(sourceDirectory, "web", "model.js"), "text/javascript; charset=utf-8"]],
+  ["/js/view.js", [join(sourceDirectory, "web", "view.js"), "text/javascript; charset=utf-8"]],
+  ["/js/presenter.js", [join(sourceDirectory, "web", "presenter.js"), "text/javascript; charset=utf-8"]]
 ]);
 
 mkdirSync(dataDirectory, { recursive: true });
 const database = new DatabaseSync(databasePath);
-database.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-  CREATE TABLE IF NOT EXISTS analyses (
-    id TEXT PRIMARY KEY,
-    url TEXT NOT NULL,
-    title TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    completed_at TEXT,
-    analysis_json TEXT,
-    report TEXT
-  );
-  CREATE TABLE IF NOT EXISTS jobs (
-    id TEXT PRIMARY KEY,
-    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
-    status TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    progress INTEGER NOT NULL,
-    error TEXT,
-    updated_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS patterns (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    category TEXT NOT NULL,
-    occurrences INTEGER NOT NULL DEFAULT 0,
-    first_seen TEXT NOT NULL,
-    last_seen TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS analysis_patterns (
-    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
-    pattern_key TEXT NOT NULL REFERENCES patterns(key),
-    PRIMARY KEY (analysis_id, pattern_key)
-  );
-  CREATE TABLE IF NOT EXISTS analysis_findings (
-    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
-    finding_id TEXT NOT NULL,
-    PRIMARY KEY (analysis_id, finding_id)
-  );
-  CREATE TABLE IF NOT EXISTS feedback (
-    analysis_id TEXT PRIMARY KEY REFERENCES analyses(id) ON DELETE CASCADE,
-    usefulness INTEGER NOT NULL CHECK (usefulness BETWEEN 1 AND 5),
-    accuracy INTEGER NOT NULL CHECK (accuracy BETWEEN 1 AND 5),
-    comment TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS monitored_sites (
-    id TEXT PRIMARY KEY,
-    url TEXT NOT NULL UNIQUE,
-    max_pages INTEGER NOT NULL,
-    interval_hours INTEGER NOT NULL,
-    next_run_at TEXT NOT NULL,
-    last_run_at TEXT,
-    last_analysis_id TEXT,
-    last_error TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS analyses_created_idx ON analyses(created_at DESC);
-  CREATE INDEX IF NOT EXISTS jobs_analysis_idx ON jobs(analysis_id);
-  CREATE INDEX IF NOT EXISTS analysis_patterns_key_idx ON analysis_patterns(pattern_key);
-  CREATE INDEX IF NOT EXISTS analysis_findings_finding_idx ON analysis_findings(finding_id);
-`);
+database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+applyDatabaseMigrations();
 database.prepare("UPDATE jobs SET status = 'failed', stage = 'interrupted', error = 'Server restarted before this job finished.', updated_at = ? WHERE status = 'running'")
   .run(new Date().toISOString());
 database.prepare("UPDATE analyses SET status = 'failed' WHERE status = 'running'").run();
+
+function applyDatabaseMigrations() {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    );
+  `);
+  const migrationDirectory = join(sourceDirectory, "database", "migrations");
+  const applied = new Set(
+    database.prepare("SELECT filename FROM schema_migrations").all().map(row => row.filename)
+  );
+  const migrations = readdirSync(migrationDirectory)
+    .filter(fileName => fileName.endsWith(".sql"))
+    .sort();
+  for (const fileName of migrations) {
+    if (applied.has(fileName)) continue;
+    database.exec(readFileSync(join(migrationDirectory, fileName), "utf8"));
+    database.prepare("INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)")
+      .run(fileName, new Date().toISOString());
+  }
+}
 
 const statements = {
   insertAnalysis: database.prepare("INSERT INTO analyses (id, url, title, status, created_at) VALUES (?, ?, ?, 'running', ?)"),
@@ -671,8 +634,8 @@ const server = createServer(async (request, response) => {
       sendError(response, 404, "File was not found.");
       return;
     }
-    const [fileName, contentType] = entry;
-    const content = await import("node:fs/promises").then(fs => fs.readFile(join(root, fileName)));
+    const [filePath, contentType] = entry;
+    const content = await import("node:fs/promises").then(fs => fs.readFile(filePath));
     response.writeHead(200, {
       "Content-Type": contentType,
       "Cache-Control": "no-store",

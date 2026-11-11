@@ -31,7 +31,7 @@ export const demoSource = `<!doctype html>
 </html>`;
 
 export function createModel(fetchImpl = fetch) {
-  async function request(path, options = {}, retries = 2) {
+  async function request(path, options: RequestInit = {}, retries = 2) {
     let lastError;
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {

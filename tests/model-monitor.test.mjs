@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModel } from "./model.js";
+import { createModel } from "../src/web/model.js";
 
 test("monitor requests create, list, and delete scheduled websites", async () => {
   const calls = [];

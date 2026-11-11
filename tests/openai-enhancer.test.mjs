@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { enhanceAnalysis } from "./openai-enhancer.mjs";
+import { enhanceAnalysis } from "../src/engine/openai-enhancer.mjs";
 
 const sampleAnalysis = {
   host: "example.com",

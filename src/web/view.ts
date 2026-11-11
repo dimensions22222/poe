@@ -1,4 +1,6 @@
 export class UltronView {
+  [key: string]: any;
+
   constructor(documentRef = document) {
     this.document = documentRef;
     this.toastTimer = null;

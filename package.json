@@ -6,10 +6,17 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node --test"
+    "build": "tsc --project tsconfig.json && node scripts/copy-runtime-assets.mjs",
+    "start": "npm run build && node dist/server.js",
+    "dev": "npm run build && node --watch dist/server.js",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "test": "npm run build && node --test tests"
   },
   "dependencies": {
     "parse5": "^7.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
   }
 }

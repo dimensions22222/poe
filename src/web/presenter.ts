@@ -1,6 +1,8 @@
 import { demoSource } from "./model.js";
 
 export class UltronPresenter {
+  [key: string]: any;
+
   constructor(model, view) {
     this.model = model;
     this.view = view;

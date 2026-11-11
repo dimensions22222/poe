@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModel } from "./model.js";
+import { createModel } from "../src/web/model.js";
 
 test("URL normalization adds HTTPS and retains valid HTTP(S) URLs", () => {
   const model = createModel();
