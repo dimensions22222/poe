@@ -15,8 +15,15 @@ const sampleAnalysis = {
   palette: ["#123456"],
   typography: ["Arial"],
   design: { responsiveMediaQueries: 1, spacingTokens: ["1rem"] },
-  findings: [{ severity: "medium", title: "Missing alt text", detail: "One image has no alt attribute.", recommendation: "Add descriptive alt text." }],
-  sourceHtml: "<html>must not be sent</html>"
+  findings: [
+    {
+      severity: "medium",
+      title: "Missing alt text",
+      detail: "One image has no alt attribute.",
+      recommendation: "Add descriptive alt text.",
+    },
+  ],
+  sourceHtml: "<html>must not be sent</html>",
 };
 
 test("AI enhancement sends only extracted report data and returns response text", async () => {
@@ -32,14 +39,21 @@ test("AI enhancement sends only extracted report data and returns response text"
         ok: true,
         async json() {
           return {
-            output: [{
-              type: "message",
-              content: [{ type: "output_text", text: "Overview\nThe page has a clear heading." }]
-            }]
+            output: [
+              {
+                type: "message",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "Overview\nThe page has a clear heading.",
+                  },
+                ],
+              },
+            ],
           };
-        }
+        },
       };
-    }
+    },
   });
 
   assert.equal(requestUrl, "https://api.openai.com/v1/responses");
@@ -62,10 +76,11 @@ test("AI enhancement reports provider HTTP failures without exposing response bo
         status: 429,
         async text() {
           return "provider detail";
-        }
-      })
+        },
+      }),
     }),
-    error => error.message === "The AI enhancement service returned HTTP 429."
+    (error) =>
+      error.message === "The AI enhancement service returned HTTP 429.",
   );
 });
 
@@ -77,9 +92,9 @@ test("AI enhancement rejects empty model output", async () => {
         ok: true,
         async json() {
           return { output: [] };
-        }
-      })
+        },
+      }),
     }),
-    /returned no analysis text/
+    /returned no analysis text/,
   );
 });

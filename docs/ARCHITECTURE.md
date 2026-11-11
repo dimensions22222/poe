@@ -2,14 +2,14 @@
 
 ## Directory ownership
 
-| Directory | Purpose | Change it when… |
-| --- | --- | --- |
-| `src/server.mjs` | Local HTTP server, API routes, SQLite persistence, and monitoring scheduler | Adding an endpoint, persistence behavior, or server configuration |
-| `src/engine/` | Website retrieval, deterministic analysis, and optional AI enhancement | Changing crawl safeguards, analysis rules, or AI report enrichment |
-| `src/web/` | Browser-side Model-View-Presenter code | Changing browser behavior, state coordination, or DOM rendering |
-| `public/` | Files delivered directly to the browser | Changing page markup, styles, or the browser entry module |
-| `tests/` | Fast Node-based regression tests | Adding coverage for a bug fix or feature |
-| `data/` | Local SQLite database and runtime state | Never edit manually; it is generated locally and ignored by Git |
+| Directory        | Purpose                                                                     | Change it when…                                                    |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `src/server.mjs` | Local HTTP server, API routes, SQLite persistence, and monitoring scheduler | Adding an endpoint, persistence behavior, or server configuration  |
+| `src/engine/`    | Website retrieval, deterministic analysis, and optional AI enhancement      | Changing crawl safeguards, analysis rules, or AI report enrichment |
+| `src/web/`       | Browser-side Model-View-Presenter code                                      | Changing browser behavior, state coordination, or DOM rendering    |
+| `public/`        | Files delivered directly to the browser                                     | Changing page markup, styles, or the browser entry module          |
+| `tests/`         | Fast Node-based regression tests                                            | Adding coverage for a bug fix or feature                           |
+| `data/`          | Local SQLite database and runtime state                                     | Never edit manually; it is generated locally and ignored by Git    |
 
 ## Browser flow
 

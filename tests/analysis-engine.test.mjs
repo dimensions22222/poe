@@ -5,21 +5,44 @@ import {
   isPublicAddress,
   normalizeWebsiteUrl,
   parseRobotsRules,
-  robotsAllows
+  robotsAllows,
 } from "../src/engine/analysis-engine.mjs";
 
 test("URL validation accepts public HTTP(S) pages and rejects non-web protocols", () => {
-  assert.equal(normalizeWebsiteUrl("https://example.com/a#section").href, "https://example.com/a");
-  assert.throws(() => normalizeWebsiteUrl("file:///etc/passwd"), /Only HTTP and HTTPS/);
-  assert.throws(() => normalizeWebsiteUrl("https://user:pass@example.com"), /usernames or passwords/);
-  assert.throws(() => normalizeWebsiteUrl("http://example.com:8080"), /standard public website ports/);
-  assert.throws(() => normalizeWebsiteUrl("http://127.0.0.1/"), /Private, reserved/);
+  assert.equal(
+    normalizeWebsiteUrl("https://example.com/a#section").href,
+    "https://example.com/a",
+  );
+  assert.throws(
+    () => normalizeWebsiteUrl("file:///etc/passwd"),
+    /Only HTTP and HTTPS/,
+  );
+  assert.throws(
+    () => normalizeWebsiteUrl("https://user:pass@example.com"),
+    /usernames or passwords/,
+  );
+  assert.throws(
+    () => normalizeWebsiteUrl("http://example.com:8080"),
+    /standard public website ports/,
+  );
+  assert.throws(
+    () => normalizeWebsiteUrl("http://127.0.0.1/"),
+    /Private, reserved/,
+  );
 });
 
 test("robots rules honor user-agent groups, allow overrides, and crawl delay", () => {
-  const rules = parseRobotsRules(`User-agent: *\nDisallow: /private\nCrawl-delay: 2\nAllow: /private/public$`);
-  assert.equal(robotsAllows(new URL("https://example.com/private"), rules), false);
-  assert.equal(robotsAllows(new URL("https://example.com/private/public"), rules), true);
+  const rules = parseRobotsRules(
+    `User-agent: *\nDisallow: /private\nCrawl-delay: 2\nAllow: /private/public$`,
+  );
+  assert.equal(
+    robotsAllows(new URL("https://example.com/private"), rules),
+    false,
+  );
+  assert.equal(
+    robotsAllows(new URL("https://example.com/private/public"), rules),
+    true,
+  );
   assert.equal(rules.crawlDelayMs, 2000);
 });
 
@@ -38,9 +61,13 @@ test("SSRF address screening rejects private, reserved, mapped, and metadata ran
     "2001:10::1",
     "3fff::1",
     "::1",
-    "::ffff:127.0.0.1"
+    "::ffff:127.0.0.1",
   ]) {
-    assert.equal(isPublicAddress(address), false, `${address} should not be public`);
+    assert.equal(
+      isPublicAddress(address),
+      false,
+      `${address} should not be public`,
+    );
   }
   assert.equal(isPublicAddress("8.8.8.8"), true);
   assert.equal(isPublicAddress("2606:4700:4700::1111"), true);
@@ -55,8 +82,17 @@ test("document analysis identifies structure, technologies, and basic quality fi
   assert.equal(result.counts.navigationLandmarks, 1);
   assert.equal(result.counts.images, 1);
   assert.equal(result.counts.externalScripts, 1);
-  assert.equal(result.technologies.some(item => item.name === "Next.js"), true);
+  assert.equal(
+    result.technologies.some((item) => item.name === "Next.js"),
+    true,
+  );
   assert.equal(result.patterns.includes("responsive-layout"), true);
-  assert.equal(result.findings.some(item => item.id === "missing-alt"), true);
-  assert.equal(result.findings.some(item => item.id === "unlabeled-controls"), true);
+  assert.equal(
+    result.findings.some((item) => item.id === "missing-alt"),
+    true,
+  );
+  assert.equal(
+    result.findings.some((item) => item.id === "unlabeled-controls"),
+    true,
+  );
 });

@@ -13,13 +13,13 @@ export class UltronPresenter {
       currentAnalysisId: null,
       analysisRunning: false,
       autoAnalysisTimer: null,
-      seenMonitorResults: null
+      seenMonitorResults: null,
     };
   }
 
   start() {
     this.bindEvents();
-    this.view.setCommandAvailability(id => this.loadHistoryReport(id));
+    this.view.setCommandAvailability((id) => this.loadHistoryReport(id));
     this.view.setupWorkspaceNavigation();
     this.view.element("sourceInput").value = demoSource;
     this.buildRepository(demoSource, "");
@@ -40,44 +40,74 @@ export class UltronPresenter {
       this.view.element("feedbackButton").disabled = true;
       this.buildRepository(
         this.view.element("sourceInput").value,
-        this.view.element("urlInput").value.trim()
+        this.view.element("urlInput").value.trim(),
       );
     });
-    this.view.element("copyWebsiteButton").addEventListener("click", () => this.prepareWebsiteCopy());
-    this.view.element("urlForm").addEventListener("submit", event => this.fetchUrl(event));
-    this.view.element("urlInput").addEventListener("input", () => this.scheduleAutomaticAnalysis());
-    this.view.element("monitorForm").addEventListener("submit", event => this.addMonitor(event));
+    this.view
+      .element("copyWebsiteButton")
+      .addEventListener("click", () => this.prepareWebsiteCopy());
+    this.view
+      .element("urlForm")
+      .addEventListener("submit", (event) => this.fetchUrl(event));
+    this.view
+      .element("urlInput")
+      .addEventListener("input", () => this.scheduleAutomaticAnalysis());
+    this.view
+      .element("monitorForm")
+      .addEventListener("submit", (event) => this.addMonitor(event));
     this.view.element("fileSearch").addEventListener("input", () => {
-      this.view.renderFiles(this.state.files, this.state.selectedFile, name => this.selectFile(name));
+      this.view.renderFiles(this.state.files, this.state.selectedFile, (name) =>
+        this.selectFile(name),
+      );
     });
-    this.view.element("refreshDashboard").addEventListener("click", () => this.loadDashboard());
+    this.view
+      .element("refreshDashboard")
+      .addEventListener("click", () => this.loadDashboard());
     this.view.element("retryAnalysis").addEventListener("click", () => {
       this.view.element("urlForm").requestSubmit();
     });
     this.view.element("compareSelect").addEventListener("change", () => {
       this.view.updateCompareAvailability(this.state.currentAnalysisId);
     });
-    this.view.element("compareButton").addEventListener("click", () => this.compareReports());
-    this.view.element("feedbackForm").addEventListener("submit", event => this.saveFeedback(event));
-    this.view.element("previewTab").addEventListener("click", () => this.showPreview());
-    this.view.element("codeTab").addEventListener("click", () => this.showCode());
-    this.view.element("copyRepoButton").addEventListener("click", () => this.copySelectedFile());
-    this.view.element("downloadButton").addEventListener("click", () => this.downloadSelectedFile());
-    this.view.element("exportButton").addEventListener("click", () => this.exportRepository());
+    this.view
+      .element("compareButton")
+      .addEventListener("click", () => this.compareReports());
+    this.view
+      .element("feedbackForm")
+      .addEventListener("submit", (event) => this.saveFeedback(event));
+    this.view
+      .element("previewTab")
+      .addEventListener("click", () => this.showPreview());
+    this.view
+      .element("codeTab")
+      .addEventListener("click", () => this.showCode());
+    this.view
+      .element("copyRepoButton")
+      .addEventListener("click", () => this.copySelectedFile());
+    this.view
+      .element("downloadButton")
+      .addEventListener("click", () => this.downloadSelectedFile());
+    this.view
+      .element("exportButton")
+      .addEventListener("click", () => this.exportRepository());
   }
 
   async loadDashboard() {
     try {
       const [health, knowledge, history] = await this.model.loadDashboard();
       this.view.renderKnowledge(knowledge);
-      this.view.renderHistory(history.history, this.state.currentAnalysisId, id => this.loadHistoryReport(id));
+      this.view.renderHistory(
+        history.history,
+        this.state.currentAnalysisId,
+        (id) => this.loadHistoryReport(id),
+      );
       this.view.setEngineStatus(
-        `Local ${health.storage} engine online · rule-based retrieval memory · AI enhancement ${health.aiEnhancement ? "enabled" : "disabled"} · ${knowledge.stats.activeJobs} active job(s).`
+        `Local ${health.storage} engine online · rule-based retrieval memory · AI enhancement ${health.aiEnhancement ? "enabled" : "disabled"} · ${knowledge.stats.activeJobs} active job(s).`,
       );
     } catch (error) {
       this.view.setEngineStatus(
         `The local engine could not be reached. Run npm.cmd start in this project, then open http://127.0.0.1:3000. Opening poe-preview.html directly or through another dev server cannot reach this engine.`,
-        "error"
+        "error",
       );
     }
   }
@@ -94,7 +124,8 @@ export class UltronPresenter {
       } catch {
         return;
       }
-      if (this.state.analysisRunning || this.state.autoSubmittedUrl === url) return;
+      if (this.state.analysisRunning || this.state.autoSubmittedUrl === url)
+        return;
       this.state.autoSubmittedUrl = url;
       this.fetchUrl({ preventDefault() {} });
     }, 1200);
@@ -105,18 +136,23 @@ export class UltronPresenter {
       const { monitors } = await this.model.loadMonitors();
       this.view.renderMonitors(
         monitors,
-        id => this.loadHistoryReport(id),
-        id => this.removeMonitor(id)
+        (id) => this.loadHistoryReport(id),
+        (id) => this.removeMonitor(id),
       );
       if (this.state.seenMonitorResults === null) {
-        this.state.seenMonitorResults = new Map(monitors.map(item => [item.id, item.lastAnalysisId]));
+        this.state.seenMonitorResults = new Map(
+          monitors.map((item) => [item.id, item.lastAnalysisId]),
+        );
         return;
       }
       let newAnalysisId = null;
       const currentResults = new Map();
-      monitors.forEach(item => {
+      monitors.forEach((item) => {
         currentResults.set(item.id, item.lastAnalysisId);
-        if (item.lastAnalysisId && this.state.seenMonitorResults.get(item.id) !== item.lastAnalysisId) {
+        if (
+          item.lastAnalysisId &&
+          this.state.seenMonitorResults.get(item.id) !== item.lastAnalysisId
+        ) {
           newAnalysisId = item.lastAnalysisId;
         }
       });
@@ -125,7 +161,9 @@ export class UltronPresenter {
         await this.loadHistoryReport(newAnalysisId);
       }
     } catch (error) {
-      this.view.notify(`Scheduled monitor list could not be loaded: ${error.message}`);
+      this.view.notify(
+        `Scheduled monitor list could not be loaded: ${error.message}`,
+      );
     }
   }
 
@@ -134,11 +172,13 @@ export class UltronPresenter {
     const button = this.view.element("addMonitorButton");
     button.disabled = true;
     try {
-      const url = this.model.normalizeUrl(this.view.element("monitorUrl").value);
+      const url = this.model.normalizeUrl(
+        this.view.element("monitorUrl").value,
+      );
       await this.model.addMonitor(
         url,
         Number(this.view.element("monitorPageLimit").value),
-        Number(this.view.element("monitorInterval").value)
+        Number(this.view.element("monitorInterval").value),
       );
       this.view.element("monitorForm").reset();
       await this.loadMonitors();
@@ -162,12 +202,15 @@ export class UltronPresenter {
 
   buildRepository(rawHtml, pageUrl, report = null) {
     try {
-      const repository = typeof rawHtml === "string"
-        ? this.model.buildRepository(rawHtml, pageUrl, report)
-        : rawHtml;
+      const repository =
+        typeof rawHtml === "string"
+          ? this.model.buildRepository(rawHtml, pageUrl, report)
+          : rawHtml;
       this.state.files = repository.files;
       this.state.selectedFile = "index.html";
-      this.view.renderRepository(repository, this.state.selectedFile, name => this.selectFile(name));
+      this.view.renderRepository(repository, this.state.selectedFile, (name) =>
+        this.selectFile(name),
+      );
       this.view.showCode(this.state.selectedFile, this.state.files);
       this.view.setRepositoryStatus("Analysis complete");
       if (this.state.previewMode) this.showPreview();
@@ -179,7 +222,9 @@ export class UltronPresenter {
 
   prepareWebsiteCopy() {
     if (!this.view.element("copyAuthorization").checked) {
-      this.view.notify("Confirm that you own the website or have permission before preparing a copy.");
+      this.view.notify(
+        "Confirm that you own the website or have permission before preparing a copy.",
+      );
       return;
     }
     const source = this.view.element("sourceInput").value;
@@ -189,10 +234,14 @@ export class UltronPresenter {
       this.state.files = repository.files;
       this.state.selectedFile = "index.html";
       this.state.previewMode = false;
-      this.view.renderRepository(repository, this.state.selectedFile, name => this.selectFile(name));
+      this.view.renderRepository(repository, this.state.selectedFile, (name) =>
+        this.selectFile(name),
+      );
       this.view.showCode(this.state.selectedFile, this.state.files);
       this.view.setRepositoryStatus("Website copy prepared");
-      this.view.notify("Static website copy prepared. Download the files or export the project JSON.");
+      this.view.notify(
+        "Static website copy prepared. Download the files or export the project JSON.",
+      );
     } catch (error) {
       this.view.notify(error.message);
     }
@@ -202,7 +251,9 @@ export class UltronPresenter {
     this.state.selectedFile = name;
     this.state.previewMode = false;
     this.view.showCode(name, this.state.files);
-    this.view.renderFiles(this.state.files, name, file => this.selectFile(file));
+    this.view.renderFiles(this.state.files, name, (file) =>
+      this.selectFile(file),
+    );
   }
 
   showPreview() {
@@ -222,7 +273,9 @@ export class UltronPresenter {
 
     const sourceInput = this.view.element("sourceInput").value;
     const enteredUrl = this.view.element("urlInput").value.trim();
-    const hasDirectHtmlSource = Boolean(sourceInput.trim()) && /<(?:!doctype|html|head|body|main|section|nav)\b/i.test(sourceInput);
+    const hasDirectHtmlSource =
+      Boolean(sourceInput.trim()) &&
+      /<(?:!doctype|html|head|body|main|section|nav)\b/i.test(sourceInput);
 
     if (!enteredUrl && hasDirectHtmlSource) {
       this.buildRepository(this.model.analyzeSource(sourceInput, ""));
@@ -240,7 +293,10 @@ export class UltronPresenter {
     this.state.currentAnalysisId = null;
     this.view.clearForAnalysis();
     this.view.renderWorkflow("validation", 2);
-    this.view.setEngineStatus("Submitting URL for public-address and access-policy validation.", "active");
+    this.view.setEngineStatus(
+      "Submitting URL for public-address and access-policy validation.",
+      "active",
+    );
     const button = this.view.element("fetchButton");
     const originalLabel = button.textContent;
     button.disabled = true;
@@ -248,11 +304,21 @@ export class UltronPresenter {
     this.view.setRepositoryStatus("Initializing intelligence core");
     this.state.analysisRunning = true;
     try {
-      const job = await this.model.submitAnalysis(url, Number(this.view.element("pageLimit").value));
-      this.view.setEngineStatus("Analysis job accepted; checking robots.txt before retrieval.", "active");
+      const job = await this.model.submitAnalysis(
+        url,
+        Number(this.view.element("pageLimit").value),
+      );
+      this.view.setEngineStatus(
+        "Analysis job accepted; checking robots.txt before retrieval.",
+        "active",
+      );
       await this.pollAnalysis(job.jobId);
     } catch (error) {
-      this.view.renderWorkflow(error.stage || "validation", error.progress || 0, true);
+      this.view.renderWorkflow(
+        error.stage || "validation",
+        error.progress || 0,
+        true,
+      );
       this.view.setRepositoryStatus("Analysis failed");
       this.view.setEngineStatus(error.message, "error");
       this.view.element("retryAnalysis").hidden = false;
@@ -274,13 +340,17 @@ export class UltronPresenter {
       comparison: "Comparing with stored patterns",
       enhancement: "Generating AI-enhanced insights",
       storing: "Saving report and learning",
-      complete: "Intelligence report generated"
+      complete: "Intelligence report generated",
     };
     const startedAt = Date.now();
     while (Date.now() - startedAt < 10 * 60 * 1000) {
       const job = await this.model.getJob(jobId);
       const label = labels[job.stage] || "Analyzing website";
-      this.view.renderWorkflow(job.stage, job.progress, job.status === "failed");
+      this.view.renderWorkflow(
+        job.stage,
+        job.progress,
+        job.status === "failed",
+      );
       this.view.setRepositoryStatus(label);
       if (job.status === "complete") {
         this.state.currentAnalysisId = job.analysisId;
@@ -290,26 +360,42 @@ export class UltronPresenter {
         this.view.element("usefulnessRating").value = "";
         this.view.element("accuracyRating").value = "";
         this.view.element("compareSelect").value = "";
-        this.buildRepository(job.sourceHtml || "", job.analysis.url, job.report);
-        this.view.renderAnalysis(job.analysis, job.report, this.state.currentAnalysisId);
+        this.buildRepository(
+          job.sourceHtml || "",
+          job.analysis.url,
+          job.report,
+        );
+        this.view.renderAnalysis(
+          job.analysis,
+          job.report,
+          this.state.currentAnalysisId,
+        );
         this.view.renderWorkflow("complete", 100);
         this.view.setRepositoryStatus("Intelligence report generated");
         this.view.setEngineStatus(
-          `Analysis complete · ${job.analysis.pageCount} permitted page(s) · ${job.analysis.confidence}% heuristic confidence.`
+          `Analysis complete · ${job.analysis.pageCount} permitted page(s) · ${job.analysis.confidence}% heuristic confidence.`,
         );
         await this.loadDashboard();
         return;
       }
       if (job.status === "failed") {
-        throw Object.assign(new Error(job.error || "Website analysis failed."), {
-          stage: job.stage,
-          progress: job.progress
-        });
+        throw Object.assign(
+          new Error(job.error || "Website analysis failed."),
+          {
+            stage: job.stage,
+            progress: job.progress,
+          },
+        );
       }
-      this.view.setEngineStatus(`${label} · ${job.progress}% complete.`, "active");
-      await new Promise(resolve => setTimeout(resolve, 750));
+      this.view.setEngineStatus(
+        `${label} · ${job.progress}% complete.`,
+        "active",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 750));
     }
-    throw new Error("Analysis is taking longer than expected. Refresh the dashboard to check persisted job status.");
+    throw new Error(
+      "Analysis is taking longer than expected. Refresh the dashboard to check persisted job status.",
+    );
   }
 
   async loadHistoryReport(analysisId) {
@@ -321,13 +407,23 @@ export class UltronPresenter {
         this.view.element("sourceInput").value = record.sourceHtml;
         this.buildRepository(record.sourceHtml, record.url, record.report);
       }
-      this.view.renderAnalysis(record.analysis, record.report, this.state.currentAnalysisId);
-      this.view.element("usefulnessRating").value = record.feedback?.usefulness ?? "";
-      this.view.element("accuracyRating").value = record.feedback?.accuracy ?? "";
+      this.view.renderAnalysis(
+        record.analysis,
+        record.report,
+        this.state.currentAnalysisId,
+      );
+      this.view.element("usefulnessRating").value =
+        record.feedback?.usefulness ?? "";
+      this.view.element("accuracyRating").value =
+        record.feedback?.accuracy ?? "";
       this.view.element("comparisonResult").textContent = "";
       this.view.setEngineStatus(`Loaded stored analysis for ${record.title}.`);
       const history = await this.model.loadHistory();
-      this.view.renderHistory(history.history, this.state.currentAnalysisId, id => this.loadHistoryReport(id));
+      this.view.renderHistory(
+        history.history,
+        this.state.currentAnalysisId,
+        (id) => this.loadHistoryReport(id),
+      );
     } catch (error) {
       this.view.notify(error.message);
     }
@@ -339,7 +435,10 @@ export class UltronPresenter {
     const button = this.view.element("compareButton");
     button.disabled = true;
     try {
-      const result = await this.model.compareReports(this.state.currentAnalysisId, against);
+      const result = await this.model.compareReports(
+        this.state.currentAnalysisId,
+        against,
+      );
       this.view.renderComparison(result.comparison);
     } catch (error) {
       this.view.notify(error.message);
@@ -357,9 +456,11 @@ export class UltronPresenter {
       await this.model.saveFeedback(
         this.state.currentAnalysisId,
         Number(this.view.element("usefulnessRating").value),
-        Number(this.view.element("accuracyRating").value)
+        Number(this.view.element("accuracyRating").value),
       );
-      this.view.notify("Feedback saved. Similar future findings will use this rating.");
+      this.view.notify(
+        "Feedback saved. Similar future findings will use this rating.",
+      );
       await this.loadDashboard();
     } catch (error) {
       this.view.notify(error.message);
@@ -370,7 +471,9 @@ export class UltronPresenter {
 
   async copySelectedFile() {
     try {
-      await navigator.clipboard.writeText(this.state.files[this.state.selectedFile] || "");
+      await navigator.clipboard.writeText(
+        this.state.files[this.state.selectedFile] || "",
+      );
       this.view.notify(`${this.state.selectedFile} copied to clipboard.`);
     } catch {
       const codeView = this.view.element("codeView");
@@ -393,14 +496,26 @@ export class UltronPresenter {
   downloadSelectedFile() {
     const content = this.state.files[this.state.selectedFile];
     if (content == null) return;
-    this.download(content, this.state.selectedFile, `Downloading ${this.state.selectedFile}`);
+    this.download(
+      content,
+      this.state.selectedFile,
+      `Downloading ${this.state.selectedFile}`,
+    );
   }
 
   exportRepository() {
-    const content = JSON.stringify({
-      name: this.view.element("repoName").textContent,
-      files: this.state.files
-    }, null, 2);
-    this.download(content, "deconstructed-repo.json", "Repository JSON exported.");
+    const content = JSON.stringify(
+      {
+        name: this.view.element("repoName").textContent,
+        files: this.state.files,
+      },
+      null,
+      2,
+    );
+    this.download(
+      content,
+      "deconstructed-repo.json",
+      "Repository JSON exported.",
+    );
   }
 }

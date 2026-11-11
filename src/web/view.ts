@@ -11,7 +11,8 @@ export class UltronView {
 
   element(id) {
     const element = this.document.getElementById(id);
-    if (!element) throw new Error(`The interface is missing the #${id} element.`);
+    if (!element)
+      throw new Error(`The interface is missing the #${id} element.`);
     return element;
   }
 
@@ -29,13 +30,24 @@ export class UltronView {
     status.dataset.state = state;
     const online = state !== "error";
     this.element("sidebarEngineLabel").textContent =
-      state === "error" ? "Unavailable" : state === "active" ? "Analysis active" : "Operational";
+      state === "error"
+        ? "Unavailable"
+        : state === "active"
+          ? "Analysis active"
+          : "Operational";
     this.element("sidebarEngineDetail").textContent =
       state === "error" ? "Check local service" : "Local analysis engine";
     this.element("overviewEngineStatus").textContent =
-      state === "error" ? "Engine unavailable" : state === "active" ? "Analysis in progress" : "Engine operational";
-    this.document.querySelectorAll(".sidebar-footer .connection-indicator, .engine-badge .connection-indicator")
-      .forEach(indicator => {
+      state === "error"
+        ? "Engine unavailable"
+        : state === "active"
+          ? "Analysis in progress"
+          : "Engine operational";
+    this.document
+      .querySelectorAll(
+        ".sidebar-footer .connection-indicator, .engine-badge .connection-indicator",
+      )
+      .forEach((indicator) => {
         indicator.classList.toggle("online", online && state !== "active");
         indicator.classList.toggle("busy", state === "active");
         indicator.classList.toggle("error", !online);
@@ -43,16 +55,31 @@ export class UltronView {
   }
 
   renderWorkflow(stage, progress = 0, failed = false) {
-    const stages = ["validation", "robots", "retrieval", "mapping", "detection", "comparison", "enhancement", "storing"];
+    const stages = [
+      "validation",
+      "robots",
+      "retrieval",
+      "mapping",
+      "detection",
+      "comparison",
+      "enhancement",
+      "storing",
+    ];
     const activeIndex = stages.indexOf(stage);
     this.document.querySelectorAll("#workflow li").forEach((item, index) => {
-      item.classList.toggle("complete", stage === "complete" || (activeIndex >= 0 && index < activeIndex));
+      item.classList.toggle(
+        "complete",
+        stage === "complete" || (activeIndex >= 0 && index < activeIndex),
+      );
       item.classList.toggle("active", activeIndex === index && !failed);
       item.classList.toggle("error", activeIndex === index && failed);
     });
-    this.element("analysisProgress").style.width = `${Math.max(0, Math.min(100, progress))}%`;
+    this.element("analysisProgress").style.width =
+      `${Math.max(0, Math.min(100, progress))}%`;
     if (stage === "complete") {
-      this.document.querySelectorAll("#workflow li").forEach(item => item.classList.add("complete"));
+      this.document
+        .querySelectorAll("#workflow li")
+        .forEach((item) => item.classList.add("complete"));
     }
   }
 
@@ -65,17 +92,21 @@ export class UltronView {
     this.element("topbarJobStatus").textContent = stats.activeJobs
       ? `${stats.activeJobs} active ${stats.activeJobs === 1 ? "job" : "jobs"}`
       : "No active jobs";
-    this.document.querySelectorAll(".task-indicator .connection-indicator").forEach(indicator => {
-      indicator.classList.toggle("busy", stats.activeJobs > 0);
-      indicator.classList.toggle("online", stats.activeJobs === 0);
-    });
+    this.document
+      .querySelectorAll(".task-indicator .connection-indicator")
+      .forEach((indicator) => {
+        indicator.classList.toggle("busy", stats.activeJobs > 0);
+        indicator.classList.toggle("online", stats.activeJobs === 0);
+      });
 
     const patternList = this.element("patternList");
     patternList.replaceChildren();
     if (!data.patterns.length) {
-      patternList.appendChild(this.emptyItem("Patterns are added after a successful URL analysis."));
+      patternList.appendChild(
+        this.emptyItem("Patterns are added after a successful URL analysis."),
+      );
     } else {
-      data.patterns.slice(0, 8).forEach(pattern => {
+      data.patterns.slice(0, 8).forEach((pattern) => {
         const item = this.document.createElement("li");
         const label = this.document.createElement("span");
         const count = this.document.createElement("span");
@@ -89,17 +120,25 @@ export class UltronView {
     const activity = this.element("learningActivity");
     activity.replaceChildren();
     const lines = [
-      ...data.patterns.slice(0, 3).map(pattern => ({
+      ...data.patterns.slice(0, 3).map((pattern) => ({
         label: `Recognized ${pattern.category}: ${pattern.label}`,
-        detail: `${pattern.occurrences} stored observation(s)`
+        detail: `${pattern.occurrences} stored observation(s)`,
       })),
-      ...(stats.feedbackCount ? [{
-        label: "Feedback incorporated into future relevance ranking",
-        detail: `Average rating ${stats.averageFeedback ?? "not available"}/5`
-      }] : [])
+      ...(stats.feedbackCount
+        ? [
+            {
+              label: "Feedback incorporated into future relevance ranking",
+              detail: `Average rating ${stats.averageFeedback ?? "not available"}/5`,
+            },
+          ]
+        : []),
     ];
-    if (!lines.length) lines.push({ label: "No learned observations yet.", detail: "Run an analysis to create the first record." });
-    lines.forEach(line => {
+    if (!lines.length)
+      lines.push({
+        label: "No learned observations yet.",
+        detail: "Run an analysis to create the first record.",
+      });
+    lines.forEach((line) => {
       const item = this.document.createElement("li");
       const label = this.document.createElement("span");
       const detail = this.document.createElement("span");
@@ -118,11 +157,14 @@ export class UltronView {
     compareSelect.replaceChildren();
     const placeholder = this.document.createElement("option");
     placeholder.value = "";
-    placeholder.textContent = history.length ? "Select an earlier report" : "No reports to compare";
+    placeholder.textContent = history.length
+      ? "Select an earlier report"
+      : "No reports to compare";
     compareSelect.appendChild(placeholder);
 
-    if (!history.length) list.appendChild(this.emptyItem("No stored analyses yet."));
-    history.forEach(item => {
+    if (!history.length)
+      list.appendChild(this.emptyItem("No stored analyses yet."));
+    history.forEach((item) => {
       const row = this.document.createElement("li");
       const titleWrap = this.document.createElement("div");
       const open = this.document.createElement("button");
@@ -135,7 +177,9 @@ export class UltronView {
       titleWrap.className = "history-row-title";
       titleWrap.append(open, detail);
       const rating = this.document.createElement("small");
-      rating.textContent = item.feedback ? `Rated ${item.feedback.usefulness}/5` : "Not rated";
+      rating.textContent = item.feedback
+        ? `Rated ${item.feedback.usefulness}/5`
+        : "Not rated";
       row.append(titleWrap, rating);
       list.appendChild(row);
       if (item.id !== currentAnalysisId) {
@@ -158,7 +202,7 @@ export class UltronView {
       return;
     }
 
-    monitors.forEach(monitor => {
+    monitors.forEach((monitor) => {
       const row = this.document.createElement("li");
       const details = this.document.createElement("div");
       const url = this.document.createElement("strong");
@@ -167,11 +211,12 @@ export class UltronView {
       details.className = "monitor-details";
       actions.className = "monitor-actions";
       url.textContent = monitor.url;
-      const interval = monitor.intervalHours === 168
-        ? "weekly"
-        : monitor.intervalHours === 24
-          ? "daily"
-          : `every ${monitor.intervalHours} hours`;
+      const interval =
+        monitor.intervalHours === 168
+          ? "weekly"
+          : monitor.intervalHours === 24
+            ? "daily"
+            : `every ${monitor.intervalHours} hours`;
       status.textContent = monitor.lastError
         ? `Last check failed: ${monitor.lastError} · Next attempt ${new Date(monitor.nextRunAt).toLocaleString()}`
         : monitor.lastRunAt
@@ -200,11 +245,13 @@ export class UltronView {
 
   updateCompareAvailability(currentAnalysisId) {
     const select = this.element("compareSelect");
-    this.element("compareButton").disabled = !currentAnalysisId || !select.value;
+    this.element("compareButton").disabled =
+      !currentAnalysisId || !select.value;
   }
 
   renderAnalysis(analysis, report, currentAnalysisId) {
-    this.element("reportConfidence").textContent = `${analysis.confidence}% heuristic confidence · ${analysis.pageCount} page(s)`;
+    this.element("reportConfidence").textContent =
+      `${analysis.confidence}% heuristic confidence · ${analysis.pageCount} page(s)`;
     this.element("reportSummary").textContent =
       `${analysis.title} — ${analysis.counts.headings} headings, ${analysis.counts.links} links, ${analysis.counts.images} images, ${analysis.resources.length} distinct linked resources. Memory contains ${analysis.patterns.length} matched design pattern(s).`;
     this.element("reportText").textContent = report;
@@ -224,7 +271,7 @@ export class UltronView {
       formControls: "Form controls",
       stylesheets: "Stylesheets",
       externalScripts: "Scripts",
-      externalResources: "External resources"
+      externalResources: "External resources",
     };
     const metrics = this.element("reportMetrics");
     metrics.replaceChildren();
@@ -241,8 +288,11 @@ export class UltronView {
 
     const technologies = this.element("technologyList");
     technologies.replaceChildren();
-    if (!analysis.technologies.length) technologies.appendChild(this.emptyItem("No strong technology signatures detected.", "span"));
-    analysis.technologies.forEach(technology => {
+    if (!analysis.technologies.length)
+      technologies.appendChild(
+        this.emptyItem("No strong technology signatures detected.", "span"),
+      );
+    analysis.technologies.forEach((technology) => {
       const chip = this.document.createElement("span");
       chip.className = "technology-chip";
       chip.textContent = `${technology.name} · ${Math.round(technology.confidence * 100)}%`;
@@ -254,7 +304,7 @@ export class UltronView {
     if (!analysis.headings?.length) {
       structure.appendChild(this.emptyItem("No headings were detected."));
     } else {
-      analysis.headings.forEach(heading => {
+      analysis.headings.forEach((heading) => {
         const item = this.document.createElement("li");
         item.textContent = `${"#".repeat(heading.level)} ${heading.text}`;
         structure.appendChild(item);
@@ -265,7 +315,7 @@ export class UltronView {
       `Palette: ${analysis.palette?.join(", ") || "No inline color tokens observed"}`,
       `Typography: ${analysis.typography?.join("; ") || "No inline font families observed"}`,
       `Responsive media queries: ${analysis.design?.responsiveMediaQueries ?? 0}`,
-      `Spacing tokens: ${analysis.design?.spacingTokens?.join(", ") || "No spacing tokens extracted"}`
+      `Spacing tokens: ${analysis.design?.spacingTokens?.join(", ") || "No spacing tokens extracted"}`,
     ].join(" · ");
     this.element("performanceSummary").textContent =
       `Resource signals: ${analysis.counts.externalResources} external resource(s), ${analysis.counts.externalScripts} script(s), ${analysis.counts.images} image(s). Runtime speed and transferred bytes are not measured.`;
@@ -274,9 +324,11 @@ export class UltronView {
     resourceList.replaceChildren();
     const resources = analysis.resources || [];
     if (!resources.length) {
-      resourceList.appendChild(this.emptyItem("No external resources were identified."));
+      resourceList.appendChild(
+        this.emptyItem("No external resources were identified."),
+      );
     } else {
-      resources.slice(0, 12).forEach(resource => {
+      resources.slice(0, 12).forEach((resource) => {
         const item = this.document.createElement("li");
         item.textContent = `${resource.type}: ${resource.url}${resource.external ? " · external" : ""}`;
         resourceList.appendChild(item);
@@ -291,9 +343,11 @@ export class UltronView {
     const components = this.element("componentList");
     components.replaceChildren();
     if (!analysis.components?.length) {
-      components.appendChild(this.emptyItem("No common component patterns detected.", "span"));
+      components.appendChild(
+        this.emptyItem("No common component patterns detected.", "span"),
+      );
     } else {
-      analysis.components.forEach(component => {
+      analysis.components.forEach((component) => {
         const chip = this.document.createElement("span");
         chip.className = "component-chip";
         chip.textContent = component;
@@ -303,7 +357,7 @@ export class UltronView {
 
     const findings = this.element("findingList");
     findings.replaceChildren();
-    analysis.findings.forEach(finding => {
+    analysis.findings.forEach((finding) => {
       const item = this.document.createElement("li");
       const heading = this.document.createElement("strong");
       const details = this.document.createElement("p");
@@ -321,20 +375,36 @@ export class UltronView {
     const lines = [
       `${comparison.left.title}  →  ${comparison.right.title}`,
       "",
-      "Metric changes:"
+      "Metric changes:",
     ];
-    comparison.metrics.forEach(metric => lines.push(`- ${metric.name}: ${metric.left} → ${metric.right} (${metric.change >= 0 ? "+" : ""}${metric.change})`));
-    lines.push("", `Added technologies: ${comparison.addedTechnologies.join(", ") || "none"}`);
-    lines.push(`Removed technologies: ${comparison.removedTechnologies.join(", ") || "none"}`);
-    lines.push(`New patterns: ${comparison.addedPatterns.join(", ") || "none"}`);
-    lines.push(`Resolved findings: ${comparison.resolvedFindings.map(item => item.title).join(", ") || "none"}`);
-    lines.push(`New findings: ${comparison.addedFindings.map(item => item.title).join(", ") || "none"}`);
+    comparison.metrics.forEach((metric) =>
+      lines.push(
+        `- ${metric.name}: ${metric.left} → ${metric.right} (${metric.change >= 0 ? "+" : ""}${metric.change})`,
+      ),
+    );
+    lines.push(
+      "",
+      `Added technologies: ${comparison.addedTechnologies.join(", ") || "none"}`,
+    );
+    lines.push(
+      `Removed technologies: ${comparison.removedTechnologies.join(", ") || "none"}`,
+    );
+    lines.push(
+      `New patterns: ${comparison.addedPatterns.join(", ") || "none"}`,
+    );
+    lines.push(
+      `Resolved findings: ${comparison.resolvedFindings.map((item) => item.title).join(", ") || "none"}`,
+    );
+    lines.push(
+      `New findings: ${comparison.addedFindings.map((item) => item.title).join(", ") || "none"}`,
+    );
     this.element("comparisonResult").textContent = lines.join("\n");
   }
 
   renderRepository({ name, files }, selectedFile, onSelectFile) {
     this.element("repoName").textContent = name;
-    this.element("fileCount").textContent = `${Object.keys(files).length} files`;
+    this.element("fileCount").textContent =
+      `${Object.keys(files).length} files`;
     this.renderFiles(files, selectedFile, onSelectFile);
   }
 
@@ -343,15 +413,21 @@ export class UltronView {
     const fileList = this.element("fileList");
     fileList.replaceChildren();
     Object.keys(files)
-      .filter(name => name.toLowerCase().includes(query))
-      .forEach(name => {
+      .filter((name) => name.toLowerCase().includes(query))
+      .forEach((name) => {
         const button = this.document.createElement("button");
         const icon = this.document.createElement("span");
         const label = this.document.createElement("span");
         button.type = "button";
         button.className = `file-item${name === selectedFile ? " active" : ""}`;
         icon.className = "file-icon";
-        icon.textContent = name.endsWith(".html") ? "◇" : name.endsWith(".css") ? "▧" : name.endsWith(".js") ? "⌘" : "≡";
+        icon.textContent = name.endsWith(".html")
+          ? "◇"
+          : name.endsWith(".css")
+            ? "▧"
+            : name.endsWith(".js")
+              ? "⌘"
+              : "≡";
         label.className = "file-name";
         label.textContent = name;
         button.append(icon, label);
@@ -380,9 +456,12 @@ export class UltronView {
     const css = (files["styles.css"] || "").replace(/<\/style/gi, "<\\/style");
     preview = preview.replace(
       /<link\b[^>]*id=["']deconstructor-styles["'][^>]*>/i,
-      `<style>${css}</style>`
+      `<style>${css}</style>`,
     );
-    preview = preview.replace(/<script\b[^>]*src=["']script\.js["'][^>]*><\/script>/i, "");
+    preview = preview.replace(
+      /<script\b[^>]*src=["']script\.js["'][^>]*><\/script>/i,
+      "",
+    );
     frame.srcdoc = preview;
   }
 
@@ -409,21 +488,23 @@ export class UltronView {
       mobileMenuButton.setAttribute("aria-expanded", "false");
       mobileMenuButton.setAttribute("aria-label", "Open navigation");
     };
-    const pageLinks = [...this.document.querySelectorAll("#primaryNav .nav-link")];
-    const pageNames = new Set(pageLinks.map(link => link.dataset.section));
+    const pageLinks = [
+      ...this.document.querySelectorAll("#primaryNav .nav-link"),
+    ];
+    const pageNames = new Set(pageLinks.map((link) => link.dataset.section));
     const pageFromHash = () => {
       const page = window.location.hash.slice(1);
       return pageNames.has(page) ? page : "overview";
     };
     const showPage = (page, { scroll = false } = {}) => {
       const selectedPage = pageNames.has(page) ? page : "overview";
-      this.document.querySelectorAll(".page-view").forEach(view => {
+      this.document.querySelectorAll(".page-view").forEach((view) => {
         view.hidden = view.dataset.page !== selectedPage;
       });
       this.setActiveNavigation(selectedPage);
       if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
     };
-    this.navigateToPage = page => {
+    this.navigateToPage = (page) => {
       const selectedPage = pageNames.has(page) ? page : "overview";
       if (window.location.hash.slice(1) !== selectedPage) {
         window.location.hash = selectedPage;
@@ -432,16 +513,16 @@ export class UltronView {
       }
     };
 
-    pageLinks.forEach(link => {
+    pageLinks.forEach((link) => {
       link.title = link.textContent.trim();
-      link.addEventListener("click", event => {
+      link.addEventListener("click", (event) => {
         event.preventDefault();
         this.navigateToPage(link.dataset.section);
         closeMobileMenu();
       });
     });
-    this.document.querySelectorAll("[data-navigate]").forEach(link => {
-      link.addEventListener("click", event => {
+    this.document.querySelectorAll("[data-navigate]").forEach((link) => {
+      link.addEventListener("click", (event) => {
         event.preventDefault();
         this.navigateToPage(link.dataset.navigate);
       });
@@ -449,7 +530,10 @@ export class UltronView {
     mobileMenuButton.addEventListener("click", () => {
       const open = this.document.body.classList.toggle("nav-open");
       mobileMenuButton.setAttribute("aria-expanded", String(open));
-      mobileMenuButton.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+      mobileMenuButton.setAttribute(
+        "aria-label",
+        open ? "Close navigation" : "Open navigation",
+      );
     });
     this.element("sidebarBackdrop").addEventListener("click", closeMobileMenu);
     collapseButton.addEventListener("click", () => {
@@ -464,7 +548,10 @@ export class UltronView {
       } catch {
         this.notify("Sidebar preference could not be saved.");
       }
-      collapseButton.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+      collapseButton.setAttribute(
+        "aria-label",
+        collapsed ? "Expand sidebar" : "Collapse sidebar",
+      );
       collapseButton.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
     });
     try {
@@ -477,39 +564,53 @@ export class UltronView {
       console.info("Sidebar preference storage is unavailable.");
     }
 
-    window.addEventListener("hashchange", () => showPage(pageFromHash(), { scroll: true }));
-    if (!window.location.hash || !pageNames.has(window.location.hash.slice(1))) {
+    window.addEventListener("hashchange", () =>
+      showPage(pageFromHash(), { scroll: true }),
+    );
+    if (
+      !window.location.hash ||
+      !pageNames.has(window.location.hash.slice(1))
+    ) {
       history.replaceState(null, "", "#overview");
     }
     showPage(pageFromHash());
 
     const dialog = this.element("commandDialog");
-    this.element("commandTrigger").addEventListener("click", () => this.openCommandPalette());
-    this.element("closeCommandDialog").addEventListener("click", () => dialog.close());
-    this.element("commandInput").addEventListener("input", event => {
+    this.element("commandTrigger").addEventListener("click", () =>
+      this.openCommandPalette(),
+    );
+    this.element("closeCommandDialog").addEventListener("click", () =>
+      dialog.close(),
+    );
+    this.element("commandInput").addEventListener("input", (event) => {
       this.commandSelection = 0;
       this.renderCommandResults(event.target.value);
     });
-    this.element("commandInput").addEventListener("keydown", event => {
+    this.element("commandInput").addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         if (!this.commandItems.length) return;
         const direction = event.key === "ArrowDown" ? 1 : -1;
-        this.commandSelection = (this.commandSelection + direction + this.commandItems.length) % this.commandItems.length;
+        this.commandSelection =
+          (this.commandSelection + direction + this.commandItems.length) %
+          this.commandItems.length;
         this.updateCommandSelection();
-      } else if (event.key === "Enter" && this.commandItems[this.commandSelection]) {
+      } else if (
+        event.key === "Enter" &&
+        this.commandItems[this.commandSelection]
+      ) {
         event.preventDefault();
         this.executeCommand(this.commandItems[this.commandSelection]);
       }
     });
-    dialog.addEventListener("keydown", event => {
+    dialog.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         dialog.close();
       }
     });
     dialog.addEventListener("close", () => this.commandReturnFocus?.focus());
-    this.document.addEventListener("keydown", event => {
+    this.document.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         this.openCommandPalette();
@@ -517,7 +618,7 @@ export class UltronView {
         closeMobileMenu();
       }
     });
-    sidebar.addEventListener("keydown", event => {
+    sidebar.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMobileMenu();
     });
   }
@@ -536,20 +637,27 @@ export class UltronView {
     const results = this.element("commandResults");
     const normalizedQuery = query.trim().toLowerCase();
     this.commandItems = [
-      ...[...this.document.querySelectorAll("#primaryNav .nav-link")].map(link => ({
-        label: link.textContent.trim(),
-        detail: "Navigate",
-        href: link.getAttribute("href"),
-        icon: link.querySelector(".nav-icon")?.textContent || "›"
-      })),
-      ...(this.history || []).map(item => ({
+      ...[...this.document.querySelectorAll("#primaryNav .nav-link")].map(
+        (link) => ({
+          label: link.textContent.trim(),
+          detail: "Navigate",
+          href: link.getAttribute("href"),
+          icon: link.querySelector(".nav-icon")?.textContent || "›",
+        }),
+      ),
+      ...(this.history || []).map((item) => ({
         label: item.title,
         detail: `Open analysis · ${new Date(item.createdAt).toLocaleDateString()}`,
         analysisId: item.id,
-        icon: "◷"
-      }))
-    ].filter(item => `${item.label} ${item.detail}`.toLowerCase().includes(normalizedQuery));
-    this.commandSelection = Math.min(this.commandSelection, Math.max(0, this.commandItems.length - 1));
+        icon: "◷",
+      })),
+    ].filter((item) =>
+      `${item.label} ${item.detail}`.toLowerCase().includes(normalizedQuery),
+    );
+    this.commandSelection = Math.min(
+      this.commandSelection,
+      Math.max(0, this.commandItems.length - 1),
+    );
     results.replaceChildren();
     if (!this.commandItems.length) {
       const empty = this.document.createElement("div");
@@ -566,7 +674,10 @@ export class UltronView {
       button.type = "button";
       button.className = "command-item";
       button.setAttribute("role", "option");
-      button.setAttribute("aria-selected", String(index === this.commandSelection));
+      button.setAttribute(
+        "aria-selected",
+        String(index === this.commandSelection),
+      );
       icon.textContent = item.icon;
       label.textContent = item.label;
       detail.textContent = item.detail;
@@ -581,8 +692,15 @@ export class UltronView {
   }
 
   updateCommandSelection() {
-    const buttons = [...this.document.querySelectorAll("#commandResults .command-item")];
-    buttons.forEach((button, index) => button.setAttribute("aria-selected", String(index === this.commandSelection)));
+    const buttons = [
+      ...this.document.querySelectorAll("#commandResults .command-item"),
+    ];
+    buttons.forEach((button, index) =>
+      button.setAttribute(
+        "aria-selected",
+        String(index === this.commandSelection),
+      ),
+    );
     buttons[this.commandSelection]?.scrollIntoView({ block: "nearest" });
   }
 
@@ -597,10 +715,13 @@ export class UltronView {
   }
 
   setActiveNavigation(section) {
-    const link = this.document.querySelector(`#primaryNav .nav-link[data-section="${section}"]`);
+    const link = this.document.querySelector(
+      `#primaryNav .nav-link[data-section="${section}"]`,
+    );
     if (!link) return;
-    this.document.querySelectorAll("#primaryNav .nav-link")
-      .forEach(item => item.classList.toggle("active", item === link));
+    this.document
+      .querySelectorAll("#primaryNav .nav-link")
+      .forEach((item) => item.classList.toggle("active", item === link));
     this.element("currentSectionName").textContent = link.textContent.trim();
   }
 

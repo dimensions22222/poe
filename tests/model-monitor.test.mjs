@@ -12,7 +12,7 @@ test("monitor requests create, list, and delete scheduled websites", async () =>
         return path === "/api/monitors" && options.method !== "POST"
           ? { monitors: [] }
           : { id: "monitor-id" };
-      }
+      },
     };
   });
 
@@ -23,7 +23,7 @@ test("monitor requests create, list, and delete scheduled websites", async () =>
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     url: "https://example.com",
     maxPages: 3,
-    intervalHours: 24
+    intervalHours: 24,
   });
   assert.equal(calls[1].path, "/api/monitors");
   assert.equal(calls[2].path, "/api/monitors/monitor-id");

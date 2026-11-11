@@ -7,15 +7,22 @@ import { DatabaseSync } from "node:sqlite";
 import {
   analyzeWebsite,
   formatAnalysisReport,
-  normalizeWebsiteUrl
+  normalizeWebsiteUrl,
 } from "./engine/analysis-engine.js";
-import { enhanceAnalysis, isAiEnhancementEnabled } from "./engine/openai-enhancer.js";
+import {
+  enhanceAnalysis,
+  isAiEnhancementEnabled,
+} from "./engine/openai-enhancer.js";
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(sourceDirectory, "..");
 const publicDirectory = join(projectRoot, "public");
-const dataDirectory = resolve(process.env.DATA_DIR || join(projectRoot, "data"));
-const databasePath = resolve(process.env.DATABASE_PATH || join(dataDirectory, "intelligence.sqlite"));
+const dataDirectory = resolve(
+  process.env.DATA_DIR || join(projectRoot, "data"),
+);
+const databasePath = resolve(
+  process.env.DATABASE_PATH || join(dataDirectory, "intelligence.sqlite"),
+);
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "127.0.0.1";
 const MAX_ACTIVE_JOBS = 2;
@@ -26,21 +33,50 @@ const transientSources = new Map();
 let schedulingMonitors = false;
 const staticFiles = new Map([
   ["/", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
-  ["/index.html", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
-  ["/styles.css", [join(publicDirectory, "styles.css"), "text/css; charset=utf-8"]],
-  ["/app.js", [join(publicDirectory, "app.js"), "text/javascript; charset=utf-8"]],
-  ["/js/model.js", [join(sourceDirectory, "web", "model.js"), "text/javascript; charset=utf-8"]],
-  ["/js/view.js", [join(sourceDirectory, "web", "view.js"), "text/javascript; charset=utf-8"]],
-  ["/js/presenter.js", [join(sourceDirectory, "web", "presenter.js"), "text/javascript; charset=utf-8"]]
+  [
+    "/index.html",
+    [join(publicDirectory, "index.html"), "text/html; charset=utf-8"],
+  ],
+  [
+    "/styles.css",
+    [join(publicDirectory, "styles.css"), "text/css; charset=utf-8"],
+  ],
+  [
+    "/app.js",
+    [join(publicDirectory, "app.js"), "text/javascript; charset=utf-8"],
+  ],
+  [
+    "/js/model.js",
+    [
+      join(sourceDirectory, "web", "model.js"),
+      "text/javascript; charset=utf-8",
+    ],
+  ],
+  [
+    "/js/view.js",
+    [join(sourceDirectory, "web", "view.js"), "text/javascript; charset=utf-8"],
+  ],
+  [
+    "/js/presenter.js",
+    [
+      join(sourceDirectory, "web", "presenter.js"),
+      "text/javascript; charset=utf-8",
+    ],
+  ],
 ]);
 
 mkdirSync(dataDirectory, { recursive: true });
 const database = new DatabaseSync(databasePath);
 database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
 applyDatabaseMigrations();
-database.prepare("UPDATE jobs SET status = 'failed', stage = 'interrupted', error = 'Server restarted before this job finished.', updated_at = ? WHERE status = 'running'")
+database
+  .prepare(
+    "UPDATE jobs SET status = 'failed', stage = 'interrupted', error = 'Server restarted before this job finished.', updated_at = ? WHERE status = 'running'",
+  )
   .run(new Date().toISOString());
-database.prepare("UPDATE analyses SET status = 'failed' WHERE status = 'running'").run();
+database
+  .prepare("UPDATE analyses SET status = 'failed' WHERE status = 'running'")
+  .run();
 
 function applyDatabaseMigrations() {
   database.exec(`
@@ -51,31 +87,47 @@ function applyDatabaseMigrations() {
   `);
   const migrationDirectory = join(sourceDirectory, "database", "migrations");
   const applied = new Set(
-    database.prepare("SELECT filename FROM schema_migrations").all().map(row => row.filename)
+    database
+      .prepare("SELECT filename FROM schema_migrations")
+      .all()
+      .map((row) => row.filename),
   );
   const migrations = readdirSync(migrationDirectory)
-    .filter(fileName => fileName.endsWith(".sql"))
+    .filter((fileName) => fileName.endsWith(".sql"))
     .sort();
   for (const fileName of migrations) {
     if (applied.has(fileName)) continue;
     database.exec(readFileSync(join(migrationDirectory, fileName), "utf8"));
-    database.prepare("INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)")
+    database
+      .prepare(
+        "INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
+      )
       .run(fileName, new Date().toISOString());
   }
 }
 
 const statements = {
-  insertAnalysis: database.prepare("INSERT INTO analyses (id, url, title, status, created_at) VALUES (?, ?, ?, 'running', ?)"),
-  insertJob: database.prepare("INSERT INTO jobs (id, analysis_id, status, stage, progress, updated_at) VALUES (?, ?, 'running', 'initializing', 0, ?)"),
-  updateJob: database.prepare("UPDATE jobs SET status = ?, stage = ?, progress = ?, error = ?, updated_at = ? WHERE id = ?"),
-  updateAnalysis: database.prepare("UPDATE analyses SET title = ?, status = ?, completed_at = ?, analysis_json = ?, report = ? WHERE id = ?"),
+  insertAnalysis: database.prepare(
+    "INSERT INTO analyses (id, url, title, status, created_at) VALUES (?, ?, ?, 'running', ?)",
+  ),
+  insertJob: database.prepare(
+    "INSERT INTO jobs (id, analysis_id, status, stage, progress, updated_at) VALUES (?, ?, 'running', 'initializing', 0, ?)",
+  ),
+  updateJob: database.prepare(
+    "UPDATE jobs SET status = ?, stage = ?, progress = ?, error = ?, updated_at = ? WHERE id = ?",
+  ),
+  updateAnalysis: database.prepare(
+    "UPDATE analyses SET title = ?, status = ?, completed_at = ?, analysis_json = ?, report = ? WHERE id = ?",
+  ),
   getJob: database.prepare(`
     SELECT jobs.id, jobs.analysis_id AS analysisId, jobs.status, jobs.stage,
       jobs.progress, jobs.error, analyses.url, analyses.title,
       analyses.analysis_json AS analysisJson, analyses.report
     FROM jobs JOIN analyses ON analyses.id = jobs.analysis_id WHERE jobs.id = ?
   `),
-  getAnalysis: database.prepare("SELECT id, url, title, status, created_at AS createdAt, completed_at AS completedAt, analysis_json AS analysisJson, report FROM analyses WHERE id = ?"),
+  getAnalysis: database.prepare(
+    "SELECT id, url, title, status, created_at AS createdAt, completed_at AS completedAt, analysis_json AS analysisJson, report FROM analyses WHERE id = ?",
+  ),
   getHistory: database.prepare(`
     SELECT analyses.id, analyses.url, analyses.title, analyses.status,
       analyses.created_at AS createdAt, analyses.completed_at AS completedAt,
@@ -88,8 +140,12 @@ const statements = {
     VALUES (?, ?, ?, 1, ?, ?)
     ON CONFLICT(key) DO UPDATE SET occurrences = patterns.occurrences + 1, last_seen = excluded.last_seen
   `),
-  insertAnalysisPattern: database.prepare("INSERT OR IGNORE INTO analysis_patterns (analysis_id, pattern_key) VALUES (?, ?)"),
-  insertFinding: database.prepare("INSERT OR IGNORE INTO analysis_findings (analysis_id, finding_id) VALUES (?, ?)"),
+  insertAnalysisPattern: database.prepare(
+    "INSERT OR IGNORE INTO analysis_patterns (analysis_id, pattern_key) VALUES (?, ?)",
+  ),
+  insertFinding: database.prepare(
+    "INSERT OR IGNORE INTO analysis_findings (analysis_id, finding_id) VALUES (?, ?)",
+  ),
   upsertFeedback: database.prepare(`
     INSERT INTO feedback (analysis_id, usefulness, accuracy, comment, created_at)
     VALUES (?, ?, ?, ?, ?)
@@ -107,27 +163,31 @@ const statements = {
       last_analysis_id AS lastAnalysisId, last_error AS lastError
     FROM monitored_sites ORDER BY created_at DESC
   `),
-  getMonitor: database.prepare("SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours FROM monitored_sites WHERE id = ?"),
+  getMonitor: database.prepare(
+    "SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours FROM monitored_sites WHERE id = ?",
+  ),
   deleteMonitor: database.prepare("DELETE FROM monitored_sites WHERE id = ?"),
   dueMonitors: database.prepare(`
     SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours
     FROM monitored_sites WHERE next_run_at <= ? ORDER BY next_run_at LIMIT 10
   `),
-  advanceMonitor: database.prepare("UPDATE monitored_sites SET next_run_at = ? WHERE id = ?"),
+  advanceMonitor: database.prepare(
+    "UPDATE monitored_sites SET next_run_at = ? WHERE id = ?",
+  ),
   completeMonitor: database.prepare(`
     UPDATE monitored_sites SET last_run_at = ?, last_analysis_id = ?, last_error = NULL,
       next_run_at = ? WHERE id = ?
   `),
   failMonitor: database.prepare(`
     UPDATE monitored_sites SET last_run_at = ?, last_error = ?, next_run_at = ? WHERE id = ?
-  `)
+  `),
 };
 
 function sendJson(response, status, payload) {
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
   });
   response.end(JSON.stringify(payload));
 }
@@ -151,10 +211,14 @@ function readJson(request) {
   return new Promise((resolveBody, reject) => {
     const chunks = [];
     let size = 0;
-    request.on("data", chunk => {
+    request.on("data", (chunk) => {
       size += chunk.length;
       if (size > MAX_JSON_BYTES) {
-        reject(Object.assign(new Error("Request body exceeds 64 KB."), { status: 413 }));
+        reject(
+          Object.assign(new Error("Request body exceeds 64 KB."), {
+            status: 413,
+          }),
+        );
         request.destroy();
         return;
       }
@@ -165,7 +229,11 @@ function readJson(request) {
       try {
         resolveBody(JSON.parse(Buffer.concat(chunks).toString("utf8")));
       } catch {
-        reject(Object.assign(new Error("Request body must be valid JSON."), { status: 400 }));
+        reject(
+          Object.assign(new Error("Request body must be valid JSON."), {
+            status: 400,
+          }),
+        );
       }
     });
   });
@@ -175,7 +243,9 @@ function loopbackHost(header) {
   if (!header || header.length > 255) return false;
   try {
     const parsed = new URL(`http://${header}`);
-    return ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname.toLowerCase());
+    return ["localhost", "127.0.0.1", "[::1]"].includes(
+      parsed.hostname.toLowerCase(),
+    );
   } catch {
     return false;
   }
@@ -203,7 +273,7 @@ function storeCompletedAnalysis(analysisId, analysis, report) {
       now,
       JSON.stringify(persistedAnalysis),
       report,
-      analysisId
+      analysisId,
     );
     for (const pattern of analysis.patterns) {
       const key = safePatternKey("design", pattern);
@@ -212,7 +282,13 @@ function storeCompletedAnalysis(analysisId, analysis, report) {
     }
     for (const technology of analysis.technologies) {
       const key = safePatternKey("technology", technology.name);
-      statements.upsertPattern.run(key, technology.name, "technology", now, now);
+      statements.upsertPattern.run(
+        key,
+        technology.name,
+        "technology",
+        now,
+        now,
+      );
       statements.insertAnalysisPattern.run(analysisId, key);
     }
     for (const finding of analysis.findings) {
@@ -220,17 +296,22 @@ function storeCompletedAnalysis(analysisId, analysis, report) {
     }
   });
   transientSources.set(analysisId, sourceHtml);
-  if (transientSources.size > 10) transientSources.delete(transientSources.keys().next().value);
+  if (transientSources.size > 10)
+    transientSources.delete(transientSources.keys().next().value);
 }
 
 function knownPatternsFor(analysis) {
   const keys = [
-    ...analysis.patterns.map(value => safePatternKey("design", value)),
-    ...analysis.technologies.map(value => safePatternKey("technology", value.name))
+    ...analysis.patterns.map((value) => safePatternKey("design", value)),
+    ...analysis.technologies.map((value) =>
+      safePatternKey("technology", value.name),
+    ),
   ];
   if (!keys.length) return [];
   const placeholders = keys.map(() => "?").join(",");
-  return database.prepare(`
+  return database
+    .prepare(
+      `
     SELECT patterns.key, patterns.label, patterns.occurrences,
       ROUND(AVG((feedback.usefulness + feedback.accuracy) / 2.0), 1) AS feedbackScore
     FROM patterns
@@ -240,13 +321,17 @@ function knownPatternsFor(analysis) {
     GROUP BY patterns.key
     ORDER BY COALESCE(feedbackScore, 0) DESC, patterns.occurrences DESC
     LIMIT 12
-  `).all(...keys);
+  `,
+    )
+    .all(...keys);
 }
 
 function historicalFindingScores(findings) {
   if (!findings.length) return new Map();
   const placeholders = findings.map(() => "?").join(",");
-  const rows = database.prepare(`
+  const rows = database
+    .prepare(
+      `
     SELECT analysis_findings.finding_id AS findingId,
       ROUND(AVG((feedback.usefulness + feedback.accuracy) / 2.0), 1) AS score,
       COUNT(feedback.analysis_id) AS ratings
@@ -254,8 +339,10 @@ function historicalFindingScores(findings) {
     JOIN feedback ON feedback.analysis_id = analysis_findings.analysis_id
     WHERE analysis_findings.finding_id IN (${placeholders})
     GROUP BY analysis_findings.finding_id
-  `).all(...findings);
-  return new Map(rows.map(row => [row.findingId, row]));
+  `,
+    )
+    .all(...findings);
+  return new Map(rows.map((row) => [row.findingId, row]));
 }
 
 function serializeAnalysisRow(row) {
@@ -271,14 +358,24 @@ function serializeAnalysisRow(row) {
     confidence: analysis?.confidence || 0,
     technologyCount: analysis?.technologies?.length || 0,
     findingCount: analysis?.findings?.length || 0,
-    feedback: row.usefulness == null ? null : {
-      usefulness: row.usefulness,
-      accuracy: row.accuracy
-    }
+    feedback:
+      row.usefulness == null
+        ? null
+        : {
+            usefulness: row.usefulness,
+            accuracy: row.accuracy,
+          },
   };
 }
 
-async function runAnalysis(jobId, analysisId, url, maxPages, monitorId = null, monitorIntervalHours = null) {
+async function runAnalysis(
+  jobId,
+  analysisId,
+  url,
+  maxPages,
+  monitorId = null,
+  monitorIntervalHours = null,
+) {
   activeJobs.add(jobId);
   let currentStage = "validation";
   let currentProgress = 5;
@@ -286,38 +383,65 @@ async function runAnalysis(jobId, analysisId, url, maxPages, monitorId = null, m
     const analysis = await analyzeWebsite({
       url,
       maxPages,
-      onStage: stage => {
+      onStage: (stage) => {
         currentStage = stage.key;
         currentProgress = stage.progress;
-        statements.updateJob.run("running", stage.key, stage.progress, null, new Date().toISOString(), jobId);
-      }
+        statements.updateJob.run(
+          "running",
+          stage.key,
+          stage.progress,
+          null,
+          new Date().toISOString(),
+          jobId,
+        );
+      },
     });
     const knownPatterns = knownPatternsFor(analysis);
-    const findingScores = historicalFindingScores(analysis.findings.map(item => item.id));
-    analysis.findings = analysis.findings.map(item => {
-      const historical = findingScores.get(item.id);
-      return {
-        ...item,
-        history: historical ? { feedbackScore: historical.score, ratings: historical.ratings } : null,
-        relevance: historical ? Math.round((item.confidence * 70 + (historical.score / 5) * 30)) : Math.round(item.confidence * 100)
-      };
-    }).sort((left, right) => {
-      const severityOrder = ["high", "medium", "low"];
-      const severityDifference = severityOrder.indexOf(left.severity) - severityOrder.indexOf(right.severity);
-      return severityDifference || right.relevance - left.relevance;
-    });
+    const findingScores = historicalFindingScores(
+      analysis.findings.map((item) => item.id),
+    );
+    analysis.findings = analysis.findings
+      .map((item) => {
+        const historical = findingScores.get(item.id);
+        return {
+          ...item,
+          history: historical
+            ? { feedbackScore: historical.score, ratings: historical.ratings }
+            : null,
+          relevance: historical
+            ? Math.round(item.confidence * 70 + (historical.score / 5) * 30)
+            : Math.round(item.confidence * 100),
+        };
+      })
+      .sort((left, right) => {
+        const severityOrder = ["high", "medium", "low"];
+        const severityDifference =
+          severityOrder.indexOf(left.severity) -
+          severityOrder.indexOf(right.severity);
+        return severityDifference || right.relevance - left.relevance;
+      });
     currentStage = "enhancement";
     currentProgress = 92;
-    statements.updateJob.run("running", currentStage, currentProgress, null, new Date().toISOString(), jobId);
+    statements.updateJob.run(
+      "running",
+      currentStage,
+      currentProgress,
+      null,
+      new Date().toISOString(),
+      jobId,
+    );
     if (isAiEnhancementEnabled()) {
       try {
         analysis.aiEnhancement = {
           status: "complete",
-          text: await enhanceAnalysis(analysis)
+          text: await enhanceAnalysis(analysis),
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : "The AI enhancement failed.";
-        console.error(`AI enhancement for analysis ${analysisId} failed: ${message}`);
+        const message =
+          error instanceof Error ? error.message : "The AI enhancement failed.";
+        console.error(
+          `AI enhancement for analysis ${analysisId} failed: ${message}`,
+        );
         analysis.aiEnhancement = { status: "failed", message };
       }
     } else {
@@ -326,31 +450,60 @@ async function runAnalysis(jobId, analysisId, url, maxPages, monitorId = null, m
     const report = formatAnalysisReport(analysis, knownPatterns);
     currentStage = "storing";
     currentProgress = 96;
-    statements.updateJob.run("running", "storing", 96, null, new Date().toISOString(), jobId);
+    statements.updateJob.run(
+      "running",
+      "storing",
+      96,
+      null,
+      new Date().toISOString(),
+      jobId,
+    );
     storeCompletedAnalysis(analysisId, analysis, report);
-    statements.updateJob.run("complete", "complete", 100, null, new Date().toISOString(), jobId);
+    statements.updateJob.run(
+      "complete",
+      "complete",
+      100,
+      null,
+      new Date().toISOString(),
+      jobId,
+    );
     if (monitorId && monitorIntervalHours) {
       const completedAt = new Date();
       statements.completeMonitor.run(
         completedAt.toISOString(),
         analysisId,
-        new Date(completedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000).toISOString(),
-        monitorId
+        new Date(
+          completedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000,
+        ).toISOString(),
+        monitorId,
       );
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "The analysis failed.";
+    const message =
+      error instanceof Error ? error.message : "The analysis failed.";
     console.error(`Website analysis ${analysisId} failed: ${message}`);
-    statements.updateJob.run("failed", currentStage, currentProgress, message.slice(0, 500), new Date().toISOString(), jobId);
-    database.prepare("UPDATE analyses SET status = 'failed', completed_at = ? WHERE id = ?")
+    statements.updateJob.run(
+      "failed",
+      currentStage,
+      currentProgress,
+      message.slice(0, 500),
+      new Date().toISOString(),
+      jobId,
+    );
+    database
+      .prepare(
+        "UPDATE analyses SET status = 'failed', completed_at = ? WHERE id = ?",
+      )
       .run(new Date().toISOString(), analysisId);
     if (monitorId && monitorIntervalHours) {
       const failedAt = new Date();
       statements.failMonitor.run(
         failedAt.toISOString(),
         message.slice(0, 500),
-        new Date(failedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000).toISOString(),
-        monitorId
+        new Date(
+          failedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000,
+        ).toISOString(),
+        monitorId,
       );
     }
   } finally {
@@ -367,12 +520,21 @@ function startAnalysis(url, maxPages, monitor = null) {
     statements.insertJob.run(jobId, analysisId, now);
     if (monitor) {
       statements.advanceMonitor.run(
-        new Date(Date.now() + monitor.intervalHours * 60 * 60 * 1000).toISOString(),
-        monitor.id
+        new Date(
+          Date.now() + monitor.intervalHours * 60 * 60 * 1000,
+        ).toISOString(),
+        monitor.id,
       );
     }
   });
-  runAnalysis(jobId, analysisId, url, maxPages, monitor?.id || null, monitor?.intervalHours || null);
+  runAnalysis(
+    jobId,
+    analysisId,
+    url,
+    maxPages,
+    monitor?.id || null,
+    monitor?.intervalHours || null,
+  );
   return { jobId, analysisId };
 }
 
@@ -395,24 +557,46 @@ function runDueMonitors() {
 function compareAnalyses(left, right) {
   const leftAnalysis = JSON.parse(left.analysisJson);
   const rightAnalysis = JSON.parse(right.analysisJson);
-  const metricKeys = [...new Set([...Object.keys(leftAnalysis.counts), ...Object.keys(rightAnalysis.counts)])];
+  const metricKeys = [
+    ...new Set([
+      ...Object.keys(leftAnalysis.counts),
+      ...Object.keys(rightAnalysis.counts),
+    ]),
+  ];
   return {
     left: { id: left.id, title: left.title, url: left.url },
     right: { id: right.id, title: right.title, url: right.url },
-    metrics: metricKeys.map(key => ({
+    metrics: metricKeys.map((key) => ({
       name: key,
       left: leftAnalysis.counts[key] || 0,
       right: rightAnalysis.counts[key] || 0,
-      change: (rightAnalysis.counts[key] || 0) - (leftAnalysis.counts[key] || 0)
+      change:
+        (rightAnalysis.counts[key] || 0) - (leftAnalysis.counts[key] || 0),
     })),
-    addedTechnologies: rightAnalysis.technologies.map(item => item.name)
-      .filter(name => !leftAnalysis.technologies.some(item => item.name === name)),
-    removedTechnologies: leftAnalysis.technologies.map(item => item.name)
-      .filter(name => !rightAnalysis.technologies.some(item => item.name === name)),
-    addedPatterns: rightAnalysis.patterns.filter(value => !leftAnalysis.patterns.includes(value)),
-    removedPatterns: leftAnalysis.patterns.filter(value => !rightAnalysis.patterns.includes(value)),
-    addedFindings: rightAnalysis.findings.filter(item => !leftAnalysis.findings.some(previous => previous.id === item.id)),
-    resolvedFindings: leftAnalysis.findings.filter(item => !rightAnalysis.findings.some(next => next.id === item.id))
+    addedTechnologies: rightAnalysis.technologies
+      .map((item) => item.name)
+      .filter(
+        (name) => !leftAnalysis.technologies.some((item) => item.name === name),
+      ),
+    removedTechnologies: leftAnalysis.technologies
+      .map((item) => item.name)
+      .filter(
+        (name) =>
+          !rightAnalysis.technologies.some((item) => item.name === name),
+      ),
+    addedPatterns: rightAnalysis.patterns.filter(
+      (value) => !leftAnalysis.patterns.includes(value),
+    ),
+    removedPatterns: leftAnalysis.patterns.filter(
+      (value) => !rightAnalysis.patterns.includes(value),
+    ),
+    addedFindings: rightAnalysis.findings.filter(
+      (item) =>
+        !leftAnalysis.findings.some((previous) => previous.id === item.id),
+    ),
+    resolvedFindings: leftAnalysis.findings.filter(
+      (item) => !rightAnalysis.findings.some((next) => next.id === item.id),
+    ),
   };
 }
 
@@ -422,13 +606,18 @@ async function handleApi(request, response, pathname, searchParams) {
       ok: true,
       storage: "sqlite",
       learning: "rule-based retrieval",
-      aiEnhancement: isAiEnhancementEnabled()
+      aiEnhancement: isAiEnhancementEnabled(),
     });
     return;
   }
   if (request.method === "GET" && pathname === "/api/history") {
-    const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 20));
-    sendJson(response, 200, { history: statements.getHistory.all(limit).map(serializeAnalysisRow) });
+    const limit = Math.min(
+      50,
+      Math.max(1, Number(searchParams.get("limit")) || 20),
+    );
+    sendJson(response, 200, {
+      history: statements.getHistory.all(limit).map(serializeAnalysisRow),
+    });
     return;
   }
   if (request.method === "GET" && pathname === "/api/monitors") {
@@ -454,10 +643,16 @@ async function handleApi(request, response, pathname, searchParams) {
     }
     const intervalHours = Number(body.intervalHours ?? 24);
     if (!MONITOR_INTERVALS.has(intervalHours)) {
-      sendError(response, 400, "Choose a monitoring interval of 6, 24, or 168 hours.");
+      sendError(
+        response,
+        400,
+        "Choose a monitoring interval of 6, 24, or 168 hours.",
+      );
       return;
     }
-    if (database.prepare("SELECT 1 FROM monitored_sites WHERE url = ?").get(url)) {
+    if (
+      database.prepare("SELECT 1 FROM monitored_sites WHERE url = ?").get(url)
+    ) {
       sendError(response, 409, "This URL is already being monitored.");
       return;
     }
@@ -468,8 +663,10 @@ async function handleApi(request, response, pathname, searchParams) {
       url,
       maxPages,
       intervalHours,
-      new Date(createdAt.getTime() + intervalHours * 60 * 60 * 1000).toISOString(),
-      createdAt.toISOString()
+      new Date(
+        createdAt.getTime() + intervalHours * 60 * 60 * 1000,
+      ).toISOString(),
+      createdAt.toISOString(),
     );
     sendJson(response, 201, { id });
     return;
@@ -485,15 +682,21 @@ async function handleApi(request, response, pathname, searchParams) {
     return;
   }
   if (request.method === "GET" && pathname === "/api/knowledge") {
-    const totals = database.prepare(`
+    const totals = database
+      .prepare(
+        `
       SELECT COUNT(*) AS analyses,
         (SELECT COALESCE(SUM(occurrences), 0) FROM patterns) AS observations,
         (SELECT COUNT(*) FROM patterns) AS uniquePatterns,
         (SELECT COUNT(*) FROM feedback) AS feedbackCount,
         (SELECT ROUND(AVG((usefulness + accuracy) / 2.0), 1) FROM feedback) AS averageFeedback
       FROM analyses WHERE status = 'complete'
-    `).get();
-    const patterns = database.prepare(`
+    `,
+      )
+      .get();
+    const patterns = database
+      .prepare(
+        `
       SELECT patterns.key, patterns.label, patterns.category, patterns.occurrences,
         patterns.last_seen AS lastSeen,
         ROUND(AVG((feedback.usefulness + feedback.accuracy) / 2.0), 1) AS feedbackScore,
@@ -502,17 +705,25 @@ async function handleApi(request, response, pathname, searchParams) {
       LEFT JOIN analysis_patterns ON analysis_patterns.pattern_key = patterns.key
       LEFT JOIN feedback ON feedback.analysis_id = analysis_patterns.analysis_id
       GROUP BY patterns.key ORDER BY patterns.occurrences DESC, patterns.label LIMIT 20
-    `).all();
-    const active = database.prepare("SELECT COUNT(*) AS count FROM jobs WHERE status = 'running'").get().count;
+    `,
+      )
+      .all();
+    const active = database
+      .prepare("SELECT COUNT(*) AS count FROM jobs WHERE status = 'running'")
+      .get().count;
     sendJson(response, 200, {
       stats: { ...totals, activeJobs: active },
-      patterns
+      patterns,
     });
     return;
   }
   if (request.method === "POST" && pathname === "/api/analyses") {
     if (activeJobs.size >= MAX_ACTIVE_JOBS) {
-      sendError(response, 429, "The analysis queue is full. Wait for a running analysis to finish.");
+      sendError(
+        response,
+        429,
+        "The analysis queue is full. Wait for a running analysis to finish.",
+      );
       return;
     }
     const body = await readJson(request);
@@ -547,7 +758,7 @@ async function handleApi(request, response, pathname, searchParams) {
       status: row.status,
       stage: row.stage,
       progress: row.progress,
-      error: row.error
+      error: row.error,
     };
     if (row.status === "complete") {
       result.report = row.report;
@@ -557,19 +768,32 @@ async function handleApi(request, response, pathname, searchParams) {
     sendJson(response, 200, result);
     return;
   }
-  const compareMatch = pathname.match(/^\/api\/analyses\/([0-9a-f-]{36})\/compare$/i);
+  const compareMatch = pathname.match(
+    /^\/api\/analyses\/([0-9a-f-]{36})\/compare$/i,
+  );
   if (request.method === "GET" && compareMatch) {
     const otherId = searchParams.get("against");
     const left = statements.getAnalysis.get(compareMatch[1]);
     const right = otherId && statements.getAnalysis.get(otherId);
-    if (!left || !right || left.status !== "complete" || right.status !== "complete") {
-      sendError(response, 404, "Both completed analyses are required for comparison.");
+    if (
+      !left ||
+      !right ||
+      left.status !== "complete" ||
+      right.status !== "complete"
+    ) {
+      sendError(
+        response,
+        404,
+        "Both completed analyses are required for comparison.",
+      );
       return;
     }
     sendJson(response, 200, { comparison: compareAnalyses(left, right) });
     return;
   }
-  const feedbackMatch = pathname.match(/^\/api\/analyses\/([0-9a-f-]{36})\/feedback$/i);
+  const feedbackMatch = pathname.match(
+    /^\/api\/analyses\/([0-9a-f-]{36})\/feedback$/i,
+  );
   if (request.method === "POST" && feedbackMatch) {
     const analysis = statements.getAnalysis.get(feedbackMatch[1]);
     if (!analysis || analysis.status !== "complete") {
@@ -579,14 +803,34 @@ async function handleApi(request, response, pathname, searchParams) {
     const body = await readJson(request);
     const usefulness = Number(body.usefulness);
     const accuracy = Number(body.accuracy);
-    if (!Number.isInteger(usefulness) || usefulness < 1 || usefulness > 5 ||
-        !Number.isInteger(accuracy) || accuracy < 1 || accuracy > 5) {
-      sendError(response, 400, "Usefulness and accuracy ratings must be whole numbers from 1 to 5.");
+    if (
+      !Number.isInteger(usefulness) ||
+      usefulness < 1 ||
+      usefulness > 5 ||
+      !Number.isInteger(accuracy) ||
+      accuracy < 1 ||
+      accuracy > 5
+    ) {
+      sendError(
+        response,
+        400,
+        "Usefulness and accuracy ratings must be whole numbers from 1 to 5.",
+      );
       return;
     }
-    const comment = typeof body.comment === "string" ? body.comment.trim().slice(0, 300) : "";
-    database.prepare("INSERT INTO feedback (analysis_id, usefulness, accuracy, comment, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(analysis_id) DO UPDATE SET usefulness = excluded.usefulness, accuracy = excluded.accuracy, comment = excluded.comment, created_at = excluded.created_at")
-      .run(analysis.id, usefulness, accuracy, comment, new Date().toISOString());
+    const comment =
+      typeof body.comment === "string" ? body.comment.trim().slice(0, 300) : "";
+    database
+      .prepare(
+        "INSERT INTO feedback (analysis_id, usefulness, accuracy, comment, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(analysis_id) DO UPDATE SET usefulness = excluded.usefulness, accuracy = excluded.accuracy, comment = excluded.comment, created_at = excluded.created_at",
+      )
+      .run(
+        analysis.id,
+        usefulness,
+        accuracy,
+        comment,
+        new Date().toISOString(),
+      );
     sendJson(response, 200, { saved: true });
     return;
   }
@@ -597,7 +841,12 @@ async function handleApi(request, response, pathname, searchParams) {
       sendError(response, 404, "Completed analysis was not found.");
       return;
     }
-    const feedback = database.prepare("SELECT usefulness, accuracy, comment, created_at AS createdAt FROM feedback WHERE analysis_id = ?").get(row.id) || null;
+    const feedback =
+      database
+        .prepare(
+          "SELECT usefulness, accuracy, comment, created_at AS createdAt FROM feedback WHERE analysis_id = ?",
+        )
+        .get(row.id) || null;
     sendJson(response, 200, {
       id: row.id,
       url: row.url,
@@ -606,7 +855,7 @@ async function handleApi(request, response, pathname, searchParams) {
       analysis: JSON.parse(row.analysisJson),
       report: row.report,
       sourceHtml: transientSources.get(row.id) || "",
-      feedback
+      feedback,
     });
     return;
   }
@@ -615,18 +864,29 @@ async function handleApi(request, response, pathname, searchParams) {
 
 const server = createServer(async (request, response) => {
   try {
-    const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+    const requestUrl = new URL(
+      request.url || "/",
+      `http://${request.headers.host || "localhost"}`,
+    );
     const pathname = requestUrl.pathname;
     if (pathname.startsWith("/api/")) {
       if (!checkLocalRequest(request)) {
-        sendError(response, 403, "This local analysis service only accepts same-origin requests.");
+        sendError(
+          response,
+          403,
+          "This local analysis service only accepts same-origin requests.",
+        );
         return;
       }
       await handleApi(request, response, pathname, requestUrl.searchParams);
       return;
     }
     if (request.method !== "GET" && request.method !== "HEAD") {
-      sendError(response, 405, "Only GET and HEAD are supported for static files.");
+      sendError(
+        response,
+        405,
+        "Only GET and HEAD are supported for static files.",
+      );
       return;
     }
     const entry = staticFiles.get(pathname);
@@ -635,24 +895,33 @@ const server = createServer(async (request, response) => {
       return;
     }
     const [filePath, contentType] = entry;
-    const content = await import("node:fs/promises").then(fs => fs.readFile(filePath));
+    const content = await import("node:fs/promises").then((fs) =>
+      fs.readFile(filePath),
+    );
     response.writeHead(200, {
       "Content-Type": contentType,
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer"
+      "Referrer-Policy": "no-referrer",
     });
     response.end(request.method === "HEAD" ? undefined : content);
   } catch (error) {
     if (response.headersSent || response.destroyed) return;
-    const status = Number(error?.status) || (error instanceof SyntaxError ? 400 : 500);
+    const status =
+      Number(error?.status) || (error instanceof SyntaxError ? 400 : 500);
     if (status >= 500) console.error("Request failed:", error);
-    sendError(response, status, status < 500 ? error.message : "The request could not be completed.");
+    sendError(
+      response,
+      status,
+      status < 500 ? error.message : "The request could not be completed.",
+    );
   }
 });
 
 server.listen(port, host, () => {
-  console.log(`Website intelligence engine listening at http://${host}:${port}`);
+  console.log(
+    `Website intelligence engine listening at http://${host}:${port}`,
+  );
   console.log(`Persistent analysis database: ${databasePath}`);
   runDueMonitors();
 });
