@@ -305,6 +305,15 @@ This is a structural extraction, not a full website clone. External dependencies
       request("/api/history?limit=20")
     ]),
     loadHistory: () => request("/api/history?limit=20"),
+    loadMonitors: () => request("/api/monitors"),
+    addMonitor: (url, maxPages, intervalHours) => request("/api/monitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, maxPages, intervalHours })
+    }),
+    removeMonitor: id => request(`/api/monitors/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    }),
     loadHistoryReport: id => request(`/api/analyses/${id}`),
     compareReports: (id, against) => request(`/api/analyses/${id}/compare?against=${encodeURIComponent(against)}`),
     submitAnalysis: (url, maxPages) => request("/api/analyses", {
@@ -318,6 +327,7 @@ This is a structural extraction, not a full website clone. External dependencies
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ usefulness, accuracy })
     }),
+    analyzeSource: (rawHtml, pageUrl = "") => buildRepository(rawHtml, pageUrl),
     buildRepository
   };
 }

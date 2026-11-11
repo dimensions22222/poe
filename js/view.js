@@ -41,7 +41,7 @@ export class UltronView {
   }
 
   renderWorkflow(stage, progress = 0, failed = false) {
-    const stages = ["validation", "robots", "retrieval", "mapping", "detection", "comparison", "storing"];
+    const stages = ["validation", "robots", "retrieval", "mapping", "detection", "comparison", "enhancement", "storing"];
     const activeIndex = stages.indexOf(stage);
     this.document.querySelectorAll("#workflow li").forEach((item, index) => {
       item.classList.toggle("complete", stage === "complete" || (activeIndex >= 0 && index < activeIndex));
@@ -148,6 +148,54 @@ export class UltronView {
     this.updateCompareAvailability(currentAnalysisId);
   }
 
+  renderMonitors(monitors, onOpen, onRemove) {
+    const list = this.element("monitorList");
+    list.replaceChildren();
+    if (!monitors.length) {
+      list.appendChild(this.emptyItem("No websites are being monitored."));
+      return;
+    }
+
+    monitors.forEach(monitor => {
+      const row = this.document.createElement("li");
+      const details = this.document.createElement("div");
+      const url = this.document.createElement("strong");
+      const status = this.document.createElement("small");
+      const actions = this.document.createElement("div");
+      details.className = "monitor-details";
+      actions.className = "monitor-actions";
+      url.textContent = monitor.url;
+      const interval = monitor.intervalHours === 168
+        ? "weekly"
+        : monitor.intervalHours === 24
+          ? "daily"
+          : `every ${monitor.intervalHours} hours`;
+      status.textContent = monitor.lastError
+        ? `Last check failed: ${monitor.lastError} · Next attempt ${new Date(monitor.nextRunAt).toLocaleString()}`
+        : monitor.lastRunAt
+          ? `${interval} · Last checked ${new Date(monitor.lastRunAt).toLocaleString()}`
+          : `${interval} · First check ${new Date(monitor.nextRunAt).toLocaleString()}`;
+      details.append(url, status);
+      if (monitor.lastAnalysisId) {
+        const open = this.document.createElement("button");
+        open.type = "button";
+        open.className = "button subtle";
+        open.textContent = "Open latest report";
+        open.addEventListener("click", () => onOpen(monitor.lastAnalysisId));
+        actions.appendChild(open);
+      }
+      const remove = this.document.createElement("button");
+      remove.type = "button";
+      remove.className = "button subtle";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", `Stop monitoring ${monitor.url}`);
+      remove.addEventListener("click", () => onRemove(monitor.id));
+      actions.appendChild(remove);
+      row.append(details, actions);
+      list.appendChild(row);
+    });
+  }
+
   updateCompareAvailability(currentAnalysisId) {
     const select = this.element("compareSelect");
     this.element("compareButton").disabled = !currentAnalysisId || !select.value;
@@ -158,6 +206,15 @@ export class UltronView {
     this.element("reportSummary").textContent =
       `${analysis.title} — ${analysis.counts.headings} headings, ${analysis.counts.links} links, ${analysis.counts.images} images, ${analysis.resources.length} distinct linked resources. Memory contains ${analysis.patterns.length} matched design pattern(s).`;
     this.element("reportText").textContent = report;
+    const aiEnhancement = analysis.aiEnhancement;
+    this.element("aiEnhancementText").textContent =
+      aiEnhancement?.status === "complete"
+        ? aiEnhancement.text
+        : aiEnhancement?.status === "failed"
+          ? `AI enhancement unavailable: ${aiEnhancement.message} The deterministic report is still available.`
+          : aiEnhancement?.status === "disabled"
+            ? "AI enhancement is disabled. Configure OPENAI_API_KEY in the local server environment to enable it."
+            : "AI enhancement status is not available for this report.";
     const metricLabels = {
       headings: "Headings",
       links: "Links",

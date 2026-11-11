@@ -77,7 +77,7 @@
       </label>
       <button class="button primary" id="fetchButton" type="submit">Analyze URL</button>
     </form>
-      <p class="field-help" id="urlHelp">Analyze 1, 3, or 5 pages. Only public HTTP(S) hosts and standard ports are allowed.</p>
+      <p class="field-help" id="urlHelp">Paste or enter a URL to start automatically. Analyze 1, 3, or 5 pages. Only public HTTP(S) hosts and standard ports are allowed.</p>
     </section>
 
     <section class="intelligence" aria-labelledby="intelligenceTitle" id="dashboard">
@@ -102,7 +102,8 @@
           <li data-stage="mapping"><span>04</span> Map page structure</li>
           <li data-stage="detection"><span>05</span> Detect technologies</li>
           <li data-stage="comparison"><span>06</span> Compare stored patterns</li>
-          <li data-stage="storing"><span>07</span> Save report and learning</li>
+          <li data-stage="enhancement"><span>07</span> Enhance report with AI</li>
+          <li data-stage="storing"><span>08</span> Save report and learning</li>
         </ol>
         <div class="progress-track" aria-hidden="true"><span id="analysisProgress"></span></div>
       </div>
@@ -138,6 +139,32 @@
         </section>
       </div>
 
+      <section class="intel-panel monitor-panel" aria-labelledby="monitorHeading">
+        <div class="intel-panel-head">
+          <div><h3 id="monitorHeading">Scheduled monitoring</h3><span>Saved sites are re-analyzed automatically while this local engine is running.</span></div>
+          <span>Daily by default</span>
+        </div>
+        <form class="monitor-form" id="monitorForm">
+          <label class="monitor-url">
+            <span class="visually-hidden">Website to monitor</span>
+            <input id="monitorUrl" type="text" inputmode="url" placeholder="https://example.com" required>
+          </label>
+          <label class="monitor-select"><span class="visually-hidden">Pages per check</span>
+            <select id="monitorPageLimit" aria-label="Pages per scheduled analysis">
+              <option value="1">1 page</option><option value="3">Up to 3 pages</option><option value="5">Up to 5 pages</option>
+            </select>
+          </label>
+          <label class="monitor-select"><span class="visually-hidden">Check interval</span>
+            <select id="monitorInterval" aria-label="Scheduled check interval">
+              <option value="6">Every 6 hours</option><option value="24" selected>Daily</option><option value="168">Weekly</option>
+            </select>
+          </label>
+          <button class="button primary" id="addMonitorButton" type="submit">Add monitor</button>
+        </form>
+        <p class="field-help">Checks run only while the local server is open. Each check respects robots.txt, public-host restrictions, and page limits.</p>
+        <ul class="monitor-list" id="monitorList"><li class="empty-state">No websites are being monitored.</li></ul>
+      </section>
+
       <div class="intelligence-grid lower-grid">
         <section class="intel-panel report-panel" aria-labelledby="reportHeading">
           <div class="intel-panel-head">
@@ -147,6 +174,10 @@
           <div id="reportSummary" class="report-summary">Submit a public URL above to generate a report. Analysis is bounded to the selected number of same-host pages.</div>
           <div class="report-metrics" id="reportMetrics" aria-label="Page structure metrics"></div>
           <div id="technologyList" class="technology-list"></div>
+          <details class="report-details ai-enhancement" open>
+            <summary>AI-enhanced insights</summary>
+            <p id="aiEnhancementText" class="detail-copy">AI enhancement is disabled. Configure OPENAI_API_KEY in the local server environment to enable it.</p>
+          </details>
           <section class="component-section" id="components" aria-labelledby="componentsHeading">
             <h4 id="componentsHeading">Detected component patterns</h4>
             <div id="componentList" class="component-list"><span class="empty-state">Detected patterns appear after analysis.</span></div>
@@ -275,7 +306,7 @@
       <div class="settings-grid">
         <div><strong>Analysis memory</strong><span>Reports and learned pattern counts persist in the local SQLite database. Source HTML remains in memory until the server restarts.</span></div>
         <div><strong>Fetch boundaries</strong><span>HTTP(S) only · public IPs only · same-host redirects · standard ports · robots.txt respected · maximum five pages.</span></div>
-        <div><strong>Analysis method</strong><span>Deterministic HTML rules and retrieval-based recommendations. No model training, external AI service, or script execution.</span></div>
+        <div><strong>Analysis method</strong><span>Deterministic HTML rules and retrieval-based recommendations. Optional AI-enhanced insights send only extracted report data—not source HTML—to OpenAI when OPENAI_API_KEY is configured. No website scripts are executed.</span></div>
       </div>
     </section>
 

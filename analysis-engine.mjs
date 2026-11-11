@@ -684,6 +684,13 @@ export function formatAnalysisReport(analysis, knownPatterns = []) {
   const knownLines = knownPatterns.length
     ? knownPatterns.map(item => `- ${item.label}: observed ${item.occurrences} time(s), feedback score ${item.feedbackScore ?? "not rated"}/5`).join("\n")
     : "- No previously stored matching patterns.";
+  const aiEnhancement = analysis.aiEnhancement?.status === "complete"
+    ? analysis.aiEnhancement.text
+    : analysis.aiEnhancement?.status === "failed"
+      ? `AI enhancement unavailable: ${analysis.aiEnhancement.message} The deterministic report remains available.`
+      : analysis.aiEnhancement?.status === "disabled"
+        ? "AI enhancement is disabled. Configure OPENAI_API_KEY in the local server environment to enable it."
+        : "AI enhancement status is not available for this report.";
   return `# Website intelligence report
 
 > Deterministic analysis with persistent, retrieval-based memory. This is not a trained machine-learning model and does not execute website scripts. Confidence is a heuristic evidence-coverage score, not a calibrated probability.
@@ -732,5 +739,9 @@ ${knownLines}
 ## Crawl and safety limits
 
 At most five same-host pages are fetched. The crawler obeys robots.txt, revalidates DNS at every request and redirect, blocks private/reserved IP ranges, and limits response size and request time. JavaScript is never executed; findings describe the retrieved HTML, not a fully rendered page.
+
+## AI-enhanced insights
+
+${aiEnhancement}
 `;
 }

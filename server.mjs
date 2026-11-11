@@ -9,6 +9,7 @@ import {
   formatAnalysisReport,
   normalizeWebsiteUrl
 } from "./analysis-engine.mjs";
+import { enhanceAnalysis, isAiEnhancementEnabled } from "./openai-enhancer.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDirectory = resolve(process.env.DATA_DIR || join(root, "data"));
@@ -17,8 +18,10 @@ const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "127.0.0.1";
 const MAX_ACTIVE_JOBS = 2;
 const MAX_JSON_BYTES = 64 * 1024;
+const MONITOR_INTERVALS = new Set([6, 24, 168]);
 const activeJobs = new Set();
 const transientSources = new Map();
+let schedulingMonitors = false;
 const staticFiles = new Map([
   ["/", ["poe-preview.html", "text/html; charset=utf-8"]],
   ["/poe-preview.html", ["poe-preview.html", "text/html; charset=utf-8"]],
@@ -78,6 +81,17 @@ database.exec(`
     comment TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS monitored_sites (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL UNIQUE,
+    max_pages INTEGER NOT NULL,
+    interval_hours INTEGER NOT NULL,
+    next_run_at TEXT NOT NULL,
+    last_run_at TEXT,
+    last_analysis_id TEXT,
+    last_error TEXT,
+    created_at TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS analyses_created_idx ON analyses(created_at DESC);
   CREATE INDEX IF NOT EXISTS jobs_analysis_idx ON jobs(analysis_id);
   CREATE INDEX IF NOT EXISTS analysis_patterns_key_idx ON analysis_patterns(pattern_key);
@@ -119,6 +133,30 @@ const statements = {
     ON CONFLICT(analysis_id) DO UPDATE SET
       usefulness = excluded.usefulness, accuracy = excluded.accuracy,
       comment = excluded.comment, created_at = excluded.created_at
+  `),
+  insertMonitor: database.prepare(`
+    INSERT INTO monitored_sites (id, url, max_pages, interval_hours, next_run_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  getMonitors: database.prepare(`
+    SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours,
+      next_run_at AS nextRunAt, last_run_at AS lastRunAt,
+      last_analysis_id AS lastAnalysisId, last_error AS lastError
+    FROM monitored_sites ORDER BY created_at DESC
+  `),
+  getMonitor: database.prepare("SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours FROM monitored_sites WHERE id = ?"),
+  deleteMonitor: database.prepare("DELETE FROM monitored_sites WHERE id = ?"),
+  dueMonitors: database.prepare(`
+    SELECT id, url, max_pages AS maxPages, interval_hours AS intervalHours
+    FROM monitored_sites WHERE next_run_at <= ? ORDER BY next_run_at LIMIT 10
+  `),
+  advanceMonitor: database.prepare("UPDATE monitored_sites SET next_run_at = ? WHERE id = ?"),
+  completeMonitor: database.prepare(`
+    UPDATE monitored_sites SET last_run_at = ?, last_analysis_id = ?, last_error = NULL,
+      next_run_at = ? WHERE id = ?
+  `),
+  failMonitor: database.prepare(`
+    UPDATE monitored_sites SET last_run_at = ?, last_error = ?, next_run_at = ? WHERE id = ?
   `)
 };
 
@@ -277,7 +315,7 @@ function serializeAnalysisRow(row) {
   };
 }
 
-async function runAnalysis(jobId, analysisId, url, maxPages) {
+async function runAnalysis(jobId, analysisId, url, maxPages, monitorId = null, monitorIntervalHours = null) {
   activeJobs.add(jobId);
   let currentStage = "validation";
   let currentProgress = 5;
@@ -305,20 +343,89 @@ async function runAnalysis(jobId, analysisId, url, maxPages) {
       const severityDifference = severityOrder.indexOf(left.severity) - severityOrder.indexOf(right.severity);
       return severityDifference || right.relevance - left.relevance;
     });
+    currentStage = "enhancement";
+    currentProgress = 92;
+    statements.updateJob.run("running", currentStage, currentProgress, null, new Date().toISOString(), jobId);
+    if (isAiEnhancementEnabled()) {
+      try {
+        analysis.aiEnhancement = {
+          status: "complete",
+          text: await enhanceAnalysis(analysis)
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The AI enhancement failed.";
+        console.error(`AI enhancement for analysis ${analysisId} failed: ${message}`);
+        analysis.aiEnhancement = { status: "failed", message };
+      }
+    } else {
+      analysis.aiEnhancement = { status: "disabled" };
+    }
     const report = formatAnalysisReport(analysis, knownPatterns);
     currentStage = "storing";
     currentProgress = 96;
     statements.updateJob.run("running", "storing", 96, null, new Date().toISOString(), jobId);
     storeCompletedAnalysis(analysisId, analysis, report);
     statements.updateJob.run("complete", "complete", 100, null, new Date().toISOString(), jobId);
+    if (monitorId && monitorIntervalHours) {
+      const completedAt = new Date();
+      statements.completeMonitor.run(
+        completedAt.toISOString(),
+        analysisId,
+        new Date(completedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000).toISOString(),
+        monitorId
+      );
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "The analysis failed.";
     console.error(`Website analysis ${analysisId} failed: ${message}`);
     statements.updateJob.run("failed", currentStage, currentProgress, message.slice(0, 500), new Date().toISOString(), jobId);
     database.prepare("UPDATE analyses SET status = 'failed', completed_at = ? WHERE id = ?")
       .run(new Date().toISOString(), analysisId);
+    if (monitorId && monitorIntervalHours) {
+      const failedAt = new Date();
+      statements.failMonitor.run(
+        failedAt.toISOString(),
+        message.slice(0, 500),
+        new Date(failedAt.getTime() + monitorIntervalHours * 60 * 60 * 1000).toISOString(),
+        monitorId
+      );
+    }
   } finally {
     activeJobs.delete(jobId);
+  }
+}
+
+function startAnalysis(url, maxPages, monitor = null) {
+  const analysisId = randomUUID();
+  const jobId = randomUUID();
+  const now = new Date().toISOString();
+  inTransaction(() => {
+    statements.insertAnalysis.run(analysisId, url, new URL(url).hostname, now);
+    statements.insertJob.run(jobId, analysisId, now);
+    if (monitor) {
+      statements.advanceMonitor.run(
+        new Date(Date.now() + monitor.intervalHours * 60 * 60 * 1000).toISOString(),
+        monitor.id
+      );
+    }
+  });
+  runAnalysis(jobId, analysisId, url, maxPages, monitor?.id || null, monitor?.intervalHours || null);
+  return { jobId, analysisId };
+}
+
+function runDueMonitors() {
+  if (schedulingMonitors || activeJobs.size >= MAX_ACTIVE_JOBS) return;
+  schedulingMonitors = true;
+  try {
+    const now = new Date().toISOString();
+    for (const monitor of statements.dueMonitors.all(now)) {
+      if (activeJobs.size >= MAX_ACTIVE_JOBS) break;
+      startAnalysis(monitor.url, monitor.maxPages, monitor);
+    }
+  } catch (error) {
+    console.error("Scheduled website analysis could not be started:", error);
+  } finally {
+    schedulingMonitors = false;
   }
 }
 
@@ -348,12 +455,70 @@ function compareAnalyses(left, right) {
 
 async function handleApi(request, response, pathname, searchParams) {
   if (request.method === "GET" && pathname === "/api/health") {
-    sendJson(response, 200, { ok: true, storage: "sqlite", learning: "rule-based retrieval" });
+    sendJson(response, 200, {
+      ok: true,
+      storage: "sqlite",
+      learning: "rule-based retrieval",
+      aiEnhancement: isAiEnhancementEnabled()
+    });
     return;
   }
   if (request.method === "GET" && pathname === "/api/history") {
     const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 20));
     sendJson(response, 200, { history: statements.getHistory.all(limit).map(serializeAnalysisRow) });
+    return;
+  }
+  if (request.method === "GET" && pathname === "/api/monitors") {
+    sendJson(response, 200, { monitors: statements.getMonitors.all() });
+    return;
+  }
+  if (request.method === "POST" && pathname === "/api/monitors") {
+    const body = await readJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      sendError(response, 400, "The request body must be a JSON object.");
+      return;
+    }
+    let url;
+    try {
+      url = normalizeWebsiteUrl(body.url).href;
+    } catch (error) {
+      throw Object.assign(error, { status: 400 });
+    }
+    const maxPages = Number(body.maxPages ?? 1);
+    if (![1, 3, 5].includes(maxPages)) {
+      sendError(response, 400, "Choose 1, 3, or 5 pages to analyze.");
+      return;
+    }
+    const intervalHours = Number(body.intervalHours ?? 24);
+    if (!MONITOR_INTERVALS.has(intervalHours)) {
+      sendError(response, 400, "Choose a monitoring interval of 6, 24, or 168 hours.");
+      return;
+    }
+    if (database.prepare("SELECT 1 FROM monitored_sites WHERE url = ?").get(url)) {
+      sendError(response, 409, "This URL is already being monitored.");
+      return;
+    }
+    const id = randomUUID();
+    const createdAt = new Date();
+    statements.insertMonitor.run(
+      id,
+      url,
+      maxPages,
+      intervalHours,
+      new Date(createdAt.getTime() + intervalHours * 60 * 60 * 1000).toISOString(),
+      createdAt.toISOString()
+    );
+    sendJson(response, 201, { id });
+    return;
+  }
+  const monitorMatch = pathname.match(/^\/api\/monitors\/([0-9a-f-]{36})$/i);
+  if (request.method === "DELETE" && monitorMatch) {
+    const deleted = statements.deleteMonitor.run(monitorMatch[1]);
+    if (!deleted.changes) {
+      sendError(response, 404, "Monitored website was not found.");
+      return;
+    }
+    sendJson(response, 200, { deleted: true });
     return;
   }
   if (request.method === "GET" && pathname === "/api/knowledge") {
@@ -403,15 +568,7 @@ async function handleApi(request, response, pathname, searchParams) {
       sendError(response, 400, "Choose between 1 and 5 same-site pages.");
       return;
     }
-    const analysisId = randomUUID();
-    const jobId = randomUUID();
-    const now = new Date().toISOString();
-    inTransaction(() => {
-      statements.insertAnalysis.run(analysisId, url, new URL(url).hostname, now);
-      statements.insertJob.run(jobId, analysisId, now);
-    });
-    runAnalysis(jobId, analysisId, url, maxPages);
-    sendJson(response, 202, { jobId, analysisId });
+    sendJson(response, 202, startAnalysis(url, maxPages));
     return;
   }
   const jobMatch = pathname.match(/^\/api\/jobs\/([0-9a-f-]{36})$/i);
@@ -485,6 +642,7 @@ async function handleApi(request, response, pathname, searchParams) {
       createdAt: row.createdAt,
       analysis: JSON.parse(row.analysisJson),
       report: row.report,
+      sourceHtml: transientSources.get(row.id) || "",
       feedback
     });
     return;
@@ -533,7 +691,10 @@ const server = createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`Website intelligence engine listening at http://${host}:${port}`);
   console.log(`Persistent analysis database: ${databasePath}`);
+  runDueMonitors();
 });
+const monitorTimer = setInterval(runDueMonitors, 30_000);
+monitorTimer.unref();
 
 function shutdown() {
   server.close(() => {

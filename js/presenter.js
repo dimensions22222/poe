@@ -8,7 +8,10 @@ export class UltronPresenter {
       files: {},
       selectedFile: "index.html",
       previewMode: false,
-      currentAnalysisId: null
+      currentAnalysisId: null,
+      analysisRunning: false,
+      autoAnalysisTimer: null,
+      seenMonitorResults: null
     };
   }
 
@@ -19,6 +22,8 @@ export class UltronPresenter {
     this.view.element("sourceInput").value = demoSource;
     this.buildRepository(demoSource, "");
     this.loadDashboard();
+    this.loadMonitors();
+    this.monitorRefreshTimer = setInterval(() => this.loadMonitors(), 30_000);
   }
 
   bindEvents() {
@@ -37,6 +42,8 @@ export class UltronPresenter {
       );
     });
     this.view.element("urlForm").addEventListener("submit", event => this.fetchUrl(event));
+    this.view.element("urlInput").addEventListener("input", () => this.scheduleAutomaticAnalysis());
+    this.view.element("monitorForm").addEventListener("submit", event => this.addMonitor(event));
     this.view.element("fileSearch").addEventListener("input", () => {
       this.view.renderFiles(this.state.files, this.state.selectedFile, name => this.selectFile(name));
     });
@@ -62,7 +69,7 @@ export class UltronPresenter {
       this.view.renderKnowledge(knowledge);
       this.view.renderHistory(history.history, this.state.currentAnalysisId, id => this.loadHistoryReport(id));
       this.view.setEngineStatus(
-        `Local ${health.storage} engine online · rule-based retrieval memory · ${knowledge.stats.activeJobs} active job(s).`
+        `Local ${health.storage} engine online · rule-based retrieval memory · AI enhancement ${health.aiEnhancement ? "enabled" : "disabled"} · ${knowledge.stats.activeJobs} active job(s).`
       );
     } catch (error) {
       this.view.setEngineStatus(
@@ -72,9 +79,89 @@ export class UltronPresenter {
     }
   }
 
+  scheduleAutomaticAnalysis() {
+    clearTimeout(this.state.autoAnalysisTimer);
+    this.state.autoSubmittedUrl = null;
+    const entered = this.view.element("urlInput").value.trim();
+    if (!entered || this.state.analysisRunning) return;
+    this.state.autoAnalysisTimer = setTimeout(() => {
+      let url;
+      try {
+        url = this.model.normalizeUrl(entered);
+      } catch {
+        return;
+      }
+      if (this.state.analysisRunning || this.state.autoSubmittedUrl === url) return;
+      this.state.autoSubmittedUrl = url;
+      this.fetchUrl({ preventDefault() {} });
+    }, 1200);
+  }
+
+  async loadMonitors() {
+    try {
+      const { monitors } = await this.model.loadMonitors();
+      this.view.renderMonitors(
+        monitors,
+        id => this.loadHistoryReport(id),
+        id => this.removeMonitor(id)
+      );
+      if (this.state.seenMonitorResults === null) {
+        this.state.seenMonitorResults = new Map(monitors.map(item => [item.id, item.lastAnalysisId]));
+        return;
+      }
+      let newAnalysisId = null;
+      const currentResults = new Map();
+      monitors.forEach(item => {
+        currentResults.set(item.id, item.lastAnalysisId);
+        if (item.lastAnalysisId && this.state.seenMonitorResults.get(item.id) !== item.lastAnalysisId) {
+          newAnalysisId = item.lastAnalysisId;
+        }
+      });
+      this.state.seenMonitorResults = currentResults;
+      if (newAnalysisId && !this.state.analysisRunning) {
+        await this.loadHistoryReport(newAnalysisId);
+      }
+    } catch (error) {
+      this.view.notify(`Scheduled monitor list could not be loaded: ${error.message}`);
+    }
+  }
+
+  async addMonitor(event) {
+    event.preventDefault();
+    const button = this.view.element("addMonitorButton");
+    button.disabled = true;
+    try {
+      const url = this.model.normalizeUrl(this.view.element("monitorUrl").value);
+      await this.model.addMonitor(
+        url,
+        Number(this.view.element("monitorPageLimit").value),
+        Number(this.view.element("monitorInterval").value)
+      );
+      this.view.element("monitorForm").reset();
+      await this.loadMonitors();
+      this.view.notify("Website added to scheduled monitoring.");
+    } catch (error) {
+      this.view.notify(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async removeMonitor(id) {
+    try {
+      await this.model.removeMonitor(id);
+      await this.loadMonitors();
+      this.view.notify("Scheduled monitoring stopped.");
+    } catch (error) {
+      this.view.notify(error.message);
+    }
+  }
+
   buildRepository(rawHtml, pageUrl, report = null) {
     try {
-      const repository = this.model.buildRepository(rawHtml, pageUrl, report);
+      const repository = typeof rawHtml === "string"
+        ? this.model.buildRepository(rawHtml, pageUrl, report)
+        : rawHtml;
       this.state.files = repository.files;
       this.state.selectedFile = "index.html";
       this.view.renderRepository(repository, this.state.selectedFile, name => this.selectFile(name));
@@ -106,9 +193,21 @@ export class UltronPresenter {
 
   async fetchUrl(event) {
     event.preventDefault();
+    clearTimeout(this.state.autoAnalysisTimer);
+    if (this.state.analysisRunning) return;
+
+    const sourceInput = this.view.element("sourceInput").value;
+    const enteredUrl = this.view.element("urlInput").value.trim();
+    const hasDirectHtmlSource = Boolean(sourceInput.trim()) && /<(?:!doctype|html|head|body|main|section|nav)\b/i.test(sourceInput);
+
+    if (!enteredUrl && hasDirectHtmlSource) {
+      this.buildRepository(this.model.analyzeSource(sourceInput, ""));
+      return;
+    }
+
     let url;
     try {
-      url = this.model.normalizeUrl(this.view.element("urlInput").value);
+      url = this.model.normalizeUrl(enteredUrl);
     } catch (error) {
       this.view.notify(error.message);
       return;
@@ -123,6 +222,7 @@ export class UltronPresenter {
     button.disabled = true;
     button.textContent = "Initializing…";
     this.view.setRepositoryStatus("Initializing intelligence core");
+    this.state.analysisRunning = true;
     try {
       const job = await this.model.submitAnalysis(url, Number(this.view.element("pageLimit").value));
       this.view.setEngineStatus("Analysis job accepted; checking robots.txt before retrieval.", "active");
@@ -134,6 +234,7 @@ export class UltronPresenter {
       this.view.element("retryAnalysis").hidden = false;
       this.view.notify(error.message);
     } finally {
+      this.state.analysisRunning = false;
       button.disabled = false;
       button.textContent = originalLabel;
     }
@@ -147,6 +248,7 @@ export class UltronPresenter {
       mapping: "Mapping DOM and page structure",
       detection: "Identifying technologies and design patterns",
       comparison: "Comparing with stored patterns",
+      enhancement: "Generating AI-enhanced insights",
       storing: "Saving report and learning",
       complete: "Intelligence report generated"
     };
@@ -189,6 +291,10 @@ export class UltronPresenter {
     try {
       const record = await this.model.loadHistoryReport(analysisId);
       this.state.currentAnalysisId = record.id;
+      if (record.sourceHtml) {
+        this.view.element("sourceInput").value = record.sourceHtml;
+        this.buildRepository(record.sourceHtml, record.url, record.report);
+      }
       this.view.renderAnalysis(record.analysis, record.report, this.state.currentAnalysisId);
       this.view.element("usefulnessRating").value = record.feedback?.usefulness ?? "";
       this.view.element("accuracyRating").value = record.feedback?.accuracy ?? "";
