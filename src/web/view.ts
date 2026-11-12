@@ -642,14 +642,14 @@ export class UltronView {
           label: link.textContent.trim(),
           detail: "Navigate",
           href: link.getAttribute("href"),
-          icon: `/assets/ultron/${link.dataset.commandIcon || "overview"}.svg`,
+          icon: `assets/ultron/${link.dataset.commandIcon || "overview"}.svg`,
         }),
       ),
       ...(this.history || []).map((item) => ({
         label: item.title,
         detail: `Open analysis · ${new Date(item.createdAt).toLocaleDateString()}`,
         analysisId: item.id,
-        icon: "/assets/ultron/monitor.svg",
+        icon: "assets/ultron/monitor.svg",
       })),
     ].filter((item) =>
       `${item.label} ${item.detail}`.toLowerCase().includes(normalizedQuery),
@@ -678,7 +678,7 @@ export class UltronView {
         "aria-selected",
         String(index === this.commandSelection),
       );
-      if (item.icon.startsWith("/assets/")) {
+      if (item.icon.startsWith("assets/")) {
         const image = this.document.createElement("img");
         image.src = item.icon;
         image.alt = "";
