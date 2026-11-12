@@ -45,7 +45,16 @@ const ultronAssetNames = [
   "copy",
   "download",
 ];
-const staticFiles = new Map([
+const ultronStaticFiles: [string, [string, string]][] = ultronAssetNames.map(
+  (name) => [
+    `/assets/ultron/${name}.svg`,
+    [
+      join(publicDirectory, "assets", "ultron", `${name}.svg`),
+      "image/svg+xml; charset=utf-8",
+    ],
+  ],
+);
+const staticFiles = new Map<string, [string, string]>([
   ["/", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
   [
     "/index.html",
@@ -77,13 +86,7 @@ const staticFiles = new Map([
       "text/javascript; charset=utf-8",
     ],
   ],
-  ...ultronAssetNames.map((name) => [
-    `/assets/ultron/${name}.svg`,
-    [
-      join(publicDirectory, "assets", "ultron", `${name}.svg`),
-      "image/svg+xml; charset=utf-8",
-    ],
-  ]),
+  ...ultronStaticFiles,
 ]);
 
 mkdirSync(dataDirectory, { recursive: true });

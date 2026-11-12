@@ -1719,6 +1719,61 @@ kbd {
   }
 }
 
+/* Keep dense workspace controls legible before the navigation becomes mobile. */
+@media (max-width: 980px) {
+  .page-content {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .page-heading-actions {
+    flex-wrap: wrap;
+  }
+  .ingest {
+    grid-template-columns: minmax(0, 1fr) 150px auto;
+  }
+  .ingest .url-wrap {
+    grid-column: 1 / -1;
+  }
+  .workflow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px 10px;
+  }
+  .intelligence-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .monitor-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .monitor-url,
+  .monitor-form .button {
+    grid-column: 1 / -1;
+  }
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .intelligence-grid,
+  .lower-grid {
+    grid-template-columns: 1fr;
+  }
+  .copy-panel {
+    grid-template-columns: 1fr;
+  }
+  .copy-panel-actions {
+    justify-items: start;
+  }
+  .copy-consent {
+    max-width: none;
+  }
+}
+
 @media (max-width: 720px) {
   :root {
     --topbar-height: 52px;
@@ -1842,6 +1897,7 @@ kbd {
   }
   .page-heading-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
   .section-heading {
     align-items: flex-start;
@@ -1856,6 +1912,26 @@ kbd {
   }
   .intelligence-header {
     align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .intelligence-actions {
+    width: 100%;
+  }
+  .intelligence-actions .button {
+    flex: 1;
+  }
+  .intel-panel,
+  .workflow-panel {
+    padding-right: 11px;
+    padding-left: 11px;
+  }
+  .intel-panel-head {
+    gap: 8px;
+  }
+  .monitor-panel .intel-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .workflow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1913,6 +1989,118 @@ kbd {
   }
 }
 
+@media (max-width: 520px) {
+  .topbar {
+    padding-right: 11px;
+    padding-left: 11px;
+  }
+  .breadcrumb strong {
+    max-width: 128px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .page-content {
+    padding: 20px 12px 30px;
+  }
+  .page-heading-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .page-heading-actions .button,
+  .engine-badge {
+    width: 100%;
+    justify-content: center;
+  }
+  .ingest,
+  .monitor-form {
+    grid-template-columns: 1fr;
+  }
+  .ingest .url-wrap,
+  .monitor-url,
+  .monitor-form .button {
+    grid-column: auto;
+  }
+  .page-limit-wrap,
+  .ingest .button,
+  .monitor-form .button {
+    min-height: 40px;
+  }
+  .intelligence-stats {
+    gap: 7px;
+  }
+  .intel-stat {
+    min-height: 58px;
+    padding: 9px;
+  }
+  .intel-stat strong {
+    font-size: 17px;
+  }
+  .workflow {
+    gap: 5px;
+  }
+  .workflow li {
+    min-height: 34px;
+    gap: 5px;
+    font-size: 8px;
+  }
+  .workflow li span {
+    width: 19px;
+    height: 19px;
+    flex-basis: 19px;
+    font-size: 8px;
+  }
+  .monitor-list > li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .monitor-actions {
+    width: 100%;
+    flex-direction: row;
+  }
+  .monitor-actions .button {
+    flex: 1;
+  }
+  .repo-header,
+  .repo-meta {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+  .repo-title {
+    width: 100%;
+  }
+  .repo-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .repo-actions .button {
+    min-height: 36px;
+  }
+  .file-item {
+    max-width: 100%;
+  }
+  .source-head,
+  .copy-panel {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+  .source-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .source-actions .button {
+    min-height: 36px;
+  }
+  .command-dialog {
+    top: 8vh;
+  }
+  .command-footer {
+    flex-wrap: wrap;
+    padding: 7px 11px;
+  }
+}
+
 @media (max-width: 420px) {
   .intelligence {
     margin-bottom: 21px;
@@ -1942,13 +2130,13 @@ kbd {
     grid-template-columns: 1fr;
   }
   .monitor-form {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
   .monitor-url {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
   .monitor-form .button {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
   .monitor-list > li {
     align-items: flex-start;
