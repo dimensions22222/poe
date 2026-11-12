@@ -31,6 +31,20 @@ const MONITOR_INTERVALS = new Set([6, 24, 168]);
 const activeJobs = new Set();
 const transientSources = new Map();
 let schedulingMonitors = false;
+const ultronAssetNames = [
+  "core-mark",
+  "overview",
+  "analyze",
+  "studio",
+  "settings",
+  "command",
+  "menu",
+  "external-link",
+  "refresh",
+  "monitor",
+  "copy",
+  "download",
+];
 const staticFiles = new Map([
   ["/", [join(publicDirectory, "index.html"), "text/html; charset=utf-8"]],
   [
@@ -63,6 +77,13 @@ const staticFiles = new Map([
       "text/javascript; charset=utf-8",
     ],
   ],
+  ...ultronAssetNames.map((name) => [
+    `/assets/ultron/${name}.svg`,
+    [
+      join(publicDirectory, "assets", "ultron", `${name}.svg`),
+      "image/svg+xml; charset=utf-8",
+    ],
+  ]),
 ]);
 
 mkdirSync(dataDirectory, { recursive: true });

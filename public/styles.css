@@ -162,13 +162,12 @@ body.sidebar-collapsed .sidebar-collapse {
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
-  border: 1px solid #6c343b;
-  border-radius: 8px;
-  background: #28171a;
-  color: #f27b83;
-  font-size: 16px;
-  font-weight: 750;
-  letter-spacing: -0.08em;
+  overflow: hidden;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .brand-copy {
@@ -228,11 +227,18 @@ body.sidebar-collapsed .sidebar-collapse {
   width: 17px;
   flex: 0 0 17px;
   place-items: center;
-  color: var(--muted);
-  font-size: 15px;
 }
-.nav-link.active .nav-icon {
-  color: var(--red-hover);
+.nav-icon img {
+  display: block;
+  width: 17px;
+  height: 17px;
+  opacity: 0.78;
+  transition: opacity 0.14s ease, filter 0.14s ease;
+}
+.nav-link.active .nav-icon img,
+.nav-link:hover .nav-icon img {
+  opacity: 1;
+  filter: saturate(1.25) brightness(1.12);
 }
 .sidebar-spacer {
   flex: 1;
@@ -504,7 +510,11 @@ h4 {
 }
 .url-icon {
   padding-left: 12px;
-  color: var(--muted);
+}
+.url-icon img {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 .url-wrap input {
   width: 100%;
@@ -571,6 +581,23 @@ h4 {
     border-color 0.14s ease,
     background 0.14s ease,
     color 0.14s ease;
+}
+.button-icon,
+.ui-icon {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.button-icon {
+  margin-right: 0;
+}
+.heading-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 7px;
+  vertical-align: -3px;
 }
 
 .button:hover:not(:disabled) {
@@ -1562,6 +1589,11 @@ h4 {
   width: 17px;
   color: #d47e84;
   text-align: center;
+}
+.command-item-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 .command-item small {
   margin-left: auto;
