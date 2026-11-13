@@ -1,3 +1,5 @@
+# ULTRON UNMAKE
+
 # Unmake website intelligence
 
 This project remains a static browser interface, now served with a small local Node.js service. The analysis engine uses deterministic HTML rules, persistent SQLite history, retrieval of observed patterns, and user ratings to adjust future finding relevance. Optional AI-enhanced insights are available when an OpenAI API key is configured; without it, analysis remains local and rule-based.
