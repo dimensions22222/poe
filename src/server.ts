@@ -69,6 +69,22 @@ const staticFiles = new Map<string, [string, string]>([
     [join(publicDirectory, "app.js"), "text/javascript; charset=utf-8"],
   ],
   [
+    "/ultron",
+    [join(publicDirectory, "ultron.html"), "text/html; charset=utf-8"],
+  ],
+  [
+    "/ultron.html",
+    [join(publicDirectory, "ultron.html"), "text/html; charset=utf-8"],
+  ],
+  [
+    "/ultron.css",
+    [join(publicDirectory, "ultron.css"), "text/css; charset=utf-8"],
+  ],
+  [
+    "/ultron.js",
+    [join(publicDirectory, "ultron.js"), "text/javascript; charset=utf-8"],
+  ],
+  [
     "/js/model.js",
     [
       join(sourceDirectory, "web", "model.js"),
